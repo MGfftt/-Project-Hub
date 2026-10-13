@@ -306,3 +306,21 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 **Lesson.** The scanner's rule — "a project is a folder with a marker" — was a reasonable *detection* heuristic that had leaked into the *product model*, where it turned into "you cannot add a folder until it is already a repository". The fix was not a better detector but anchoring the model on what the user did (they added this folder) and letting detection refine it afterwards. A heuristic should be allowed to say "not yet"; it should not be allowed to say "not allowed".
 
 
+## D-023 · Removing a node is remembered, and adding a root never depends on the system dialog
+
+**Decision.** Two fixes from one report ("删除节点或组的时候没法删除，当重新打开的时候还会出现" and "当添加根目录选择文件夹时，无法添加"):
+
+1. Deleting a node writes a **tombstone** — `hidden_paths(root_id, path)`. The scanner loads that set per root and skips the path *and its whole subtree*. Removing the root deletes the tombstones with it (`ON DELETE CASCADE`), so re-adding the root restores the nodes.
+2. Adding a root no longer depends on the native folder picker: the 根目录管理 footer gained a 手动输入路径… box, a folder that is already a root now says so instead of appearing to do nothing, and a pick that returns nothing tells the user where the box is.
+
+**Why.** (1) Reproduced over CDP against the real app: delete `alpha/src` (id 5), the tree drops it, then `roots.rescan` **re-inserts it**. `repo.deleteNode` was never wrong — the scanner walks the disk, the directory is still there, and the row was the only place the removal was known. (2) In an automated session `dialog.showOpenDialog` never settled: the promise stayed pending and no dialog window was ever created, while `roots.add(path)` answered immediately. A path can always be typed; a native dialog cannot always be shown.
+
+**Why a tombstone table and not a `hidden` column.** There is no row left to put the column on — the row is what gets deleted. Keeping the row with a flag would have to be excluded from `pathIndex`, `scannedIndex`, `missingCandidates`, `gitNodes`, the size sweep and the tree query, and one forgotten `WHERE` would resurrect the node somewhere else. A per-root path set is smaller, leaves every existing query honest, and lives exactly as long as the root it belongs to.
+
+**Evidence.** Unit: three added cases in `tests/unit/scanner.spec.ts` — a removed node stays removed across a rescan; the subtree disappears with it and nothing is orphaned at the top level (that is the failure mode of filtering only the node itself: children get re-inserted with `parent_id = null` and surface as roots); removing the root clears the tombstones and re-adding restores the node. 176 tests pass. Over CDP, before the fix a rescan brought `src` back, after the fix the tree stays `rxfixture | alpha | beta | docs`; the manual box adds a folder, answers 这个文件夹已经是根目录了 on a repeat, and 添加根目录失败：… 路径不存在 on a typo.
+
+**Cost.** One extra table, and no migration: the schema is applied with `CREATE TABLE IF NOT EXISTS` on every open, so an existing database picks it up on the next launch. A tombstoned directory is still walked and only filtered while writing — a root full of tombstones pays a little extra I/O, which is the right trade against skipping subtrees the user may un-hide later. `deleteNode` became a transaction instead of one statement.
+
+**Lesson.** In an app that mirrors the disk, "delete" is two operations: forget this row, and never look at this path again. The second one needs somewhere to live, and every place that reads the table has to agree about it. The deliberate way back matters too — cascading the tombstones with the root gives users an obvious undo without a hidden-flag query.
+
+

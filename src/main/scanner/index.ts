@@ -18,7 +18,7 @@ import type { DB } from '../db'
 import { getDb } from '../db'
 import { repo, type EventInsert } from '../db/repo'
 import type { ScanProgress, ScanResult } from '../../shared/types'
-import { normalizePath, pathKey, safeRelative } from '../utils/path'
+import { normalizePath, isSubPath, pathKey, safeRelative } from '../utils/path'
 import { walkProjectTree, type ScanBatch, type ScanDirectory } from './walk'
 import { createLogger } from '../utils/logger'
 
@@ -56,6 +56,9 @@ export async function scanRoot(options: IndexOptions): Promise<ScanResult> {
   // changed kind since then (a `git init` inside it, or a `.git` that went away)
   // is re-classified instead of keeping its old fingerprint for ever.
   const existing = repo.scannedIndex(rootId)
+  // Paths the user removed by hand. A rescan must not walk the disk and put them
+  // back, so their whole subtree is skipped while indexing.
+  const hidden = repo.hiddenPaths(rootId)
   const seen = new Set<string>()
 
   let projects = 0
@@ -88,7 +91,7 @@ export async function scanRoot(options: IndexOptions): Promise<ScanResult> {
     if (batch.truncated) truncated = true
     skipped += batch.skipped.length
 
-    const applied = applyBatch(db, rootId, existing, batch)
+    const applied = applyBatch(db, rootId, existing, batch, hidden)
     projects += applied.projects
     folders += applied.folders
     seen.add(pathKey(root))
@@ -137,13 +140,28 @@ function applyBatch(
   db: DB,
   rootId: number,
   existing: Map<string, ScannedNode>,
-  batch: ScanBatch
+  batch: ScanBatch,
+  hidden: Set<string> = new Set()
 ): BatchOutcome {
   let projects = 0
   let folders = 0
 
+  /**
+   * A path the user removed by hand stays removed: skipping the directory itself
+   * is not enough, because its children would then be re-inserted with no parent
+   * and surface at the top of the tree. `isSubPath` covers equality too.
+   */
+  const isHidden = (p: string): boolean => {
+    if (hidden.size === 0) return false
+    for (const h of hidden) {
+      if (isSubPath(h, p)) return true
+    }
+    return false
+  }
+
   const write = (): void => {
     for (const dir of batch.dirs) {
+      if (isHidden(dir.path)) continue
       const parentId =
         dir.parentPath === null ? null : (existing.get(pathKey(dir.parentPath))?.id ?? null)
       const key = pathKey(dir.path)

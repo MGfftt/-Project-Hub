@@ -250,6 +250,54 @@ describe('scanRoot', () => {
     expect(repo.getNodeByPath(join(sb.root, 'plain', 'inner'))!.kind).toBe('folder')
   })
 
+  it('keeps a removed node removed across a rescan (D-023)', async () => {
+    sb.file('plain/alpha/package.json', '{}')
+    sb.file('plain/beta/package.json', '{}')
+    const root = repo.addRoot(sb.dir('plain'))
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+
+    const alpha = repo.getNodeByPath(join(sb.root, 'plain', 'alpha'))!
+    expect(alpha).toBeDefined()
+    repo.deleteNode(alpha.id)
+    expect(repo.getNodeByPath(join(sb.root, 'plain', 'alpha'))).toBeUndefined()
+    expect(repo.hiddenPaths(root.id).size).toBe(1)
+
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+    expect(repo.getNodeByPath(join(sb.root, 'plain', 'alpha'))).toBeUndefined()
+    // The sibling and the root itself are untouched.
+    expect(repo.getNodeByPath(join(sb.root, 'plain', 'beta'))).toBeDefined()
+    expect(repo.getNodeByPath(sb.dir('plain'))).toBeDefined()
+  })
+
+  it('hides the whole subtree of a removed folder, not only the folder', async () => {
+    sb.file('deep/alpha/src/package.json', '{}')
+    const root = repo.addRoot(sb.dir('deep'))
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 5 })
+
+    const alpha = repo.getNodeByPath(join(sb.root, 'deep', 'alpha'))!
+    repo.deleteNode(alpha.id)
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 5 })
+
+    expect(repo.getNodeByPath(join(sb.root, 'deep', 'alpha'))).toBeUndefined()
+    expect(repo.getNodeByPath(join(sb.root, 'deep', 'alpha', 'src'))).toBeUndefined()
+    // Nothing is orphaned: a re-inserted child would surface as a top-level row.
+    expect(repo.listNodes().filter((n) => n.parent_id === null).map((n) => n.name)).not.toContain('src')
+  })
+
+  it('forgets the tombstones when the root is removed, so re-adding restores them', async () => {
+    sb.file('p/alpha/package.json', '{}')
+    const root = repo.addRoot(sb.dir('p'))
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+    repo.deleteNode(repo.getNodeByPath(join(sb.root, 'p', 'alpha'))!.id)
+    expect(repo.hiddenPaths(root.id).size).toBe(1)
+
+    repo.removeRoot(root.id)
+    const again = repo.addRoot(sb.dir('p'))
+    expect(repo.hiddenPaths(again.id).size).toBe(0)
+    await scanRoot({ rootId: again.id, rootPath: again.path, maxDepth: 4 })
+    expect(repo.getNodeByPath(join(sb.root, 'p', 'alpha'))).toBeDefined()
+  })
+
   it('emits progress without flooding the caller', async () => {
     for (let i = 0; i < 120; i += 1) sb.file(`projects/p${i}/package.json`, '{}')
     const root = repo.addRoot(sb.dir('projects'))

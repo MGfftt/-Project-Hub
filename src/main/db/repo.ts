@@ -138,6 +138,13 @@ function buildStatements(db: DB) {
     missingCandidates: db.prepare(
       `SELECT * FROM nodes WHERE root_id = ? AND path IS NOT NULL AND path_missing = 0`
     ),
+    // Tombstones: a removed directory is remembered per root so the next scan
+    // does not walk the disk and insert the very same folder back.
+    insertHidden: db.prepare(
+      `INSERT OR IGNORE INTO hidden_paths (root_id, path, added_at) VALUES (?, ?, ?)`
+    ),
+    hiddenPaths: db.prepare(`SELECT path FROM hidden_paths WHERE root_id = ?`),
+    clearHidden: db.prepare(`DELETE FROM hidden_paths WHERE root_id = ?`),
     gitNodes: db.prepare(
       `SELECT n.* FROM nodes n
         WHERE n.kind = 'project' AND n.path IS NOT NULL AND n.path_missing = 0`
@@ -569,9 +576,34 @@ export const repo = {
     })()
   },
 
+  /**
+   * Remove a node from the library.
+   *
+   * A node that maps to a real directory also leaves a tombstone for its root:
+   * deleting the row alone is not enough, because the next scan walks the disk
+   * and inserts the same folder straight back. Groups have `path === null` and
+   * are never recreated by a scan, so they need no tombstone. Removing the root
+   * clears the tombstones with it (ON DELETE CASCADE), which is why "remove the
+   * root and add it again" restores the nodes.
+   */
   deleteNode(id: number): void {
+    const db = dbh()
+    const target = row<{ root_id: number | null; path: string | null }>(statements.nodeById.get(id))
+    const tx = db.transaction(() => {
+      if (target && target.root_id != null && target.path) {
+        statements.insertHidden.run(target.root_id, target.path, now())
+      }
+      statements.deleteNode.run(id)
+    })
+    tx()
+  },
+
+  /** Paths a user removed under this root; the scanner skips them and their subtree. */
+  hiddenPaths(rootId: number): Set<string> {
     dbh()
-    statements.deleteNode.run(id)
+    const out = new Set<string>()
+    for (const r of rows<{ path: string }>(statements.hiddenPaths.all(rootId))) out.add(pathKey(r.path))
+    return out
   },
 
   /** Paths currently tracked for a root, used for incremental scan diffs. */

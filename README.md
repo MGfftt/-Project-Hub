@@ -195,6 +195,10 @@ project-hub/
 
 添加根目录时，**一个普通文件夹本身就是一个项目**，不需要先有 `.git`、`package.json` 之类的标记文件。这样的文件夹同时会继续向下扫描，所以它里面可以再放别的项目；哪天在它里面 `git init`，下一次扫描或刷新就会把它识别成 Git 项目，而不需要重新添加节点。
 
+**移除是真的移除**：右键「移除」或按 `Delete` 之后，程序会记住这个路径，下一次扫描不会再从磁盘把它扫回来，它和它下面的子目录都会一直保持移出状态——直到你主动删掉根目录再重新添加。磁盘上的文件不会被做任何改动。
+
+添加根目录时通常会弹出系统的文件夹选择窗口，但**不是必须用它**：展开左下角的「根目录管理」，点「手动输入路径…」，直接把绝对路径（例如 `C:\Users\你\Desktop\项目`）粘进去按「添加」即可。系统对话框打不开的情况下（受限的 Windows 会话）这条路照样可用。
+
 全部数据与设置都在 `%APPDATA%\project-hub\`。
 
 ---
@@ -375,6 +379,10 @@ The window itself is two columns: **tree on the left, content in the middle**. I
 The timeline's scope follows the selection: pick one project and you see that project's changes, pick a group or a folder and you see every node in its subtree, and with nothing selected you see the entire workspace.
 
 When you add a root folder, **a plain folder is a project in its own right** — it needs no `.git` or `package.json` marker first. Such a folder is still walked into, so it can hold other projects; if you later run `git init` inside it, the next scan or refresh picks that up and reclassifies it, with no need to re-add the node.
+
+**Removing a node sticks.** 移除 (right-click, or `Delete`) drops the node and remembers the path, so the next scan does not walk the disk and add it back — the folder and everything under it stay out until you deliberately remove the root and add it again. Nothing on disk is ever deleted.
+
+Adding a root normally opens the system folder dialog, but you never *need* it: open **根目录管理** at the bottom of the tree column and use **手动输入路径…** to paste an absolute folder path (for example `C:\Users\你\Desktop\项目`) and press 添加. This also covers the locked-down-session case where the native dialog does not appear — the dialog is a Windows feature, pasting a path is not.
 
 All data and settings live in `%APPDATA%\project-hub\`.
 

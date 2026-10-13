@@ -70,6 +70,9 @@ export function TreePanel(): JSX.Element {
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
   /** One dialog serves both "remove node" and "remove root". */
   const [pending, setPending] = useState<PendingConfirm | null>(null)
+  /** The picker-free way in: paste a path instead of browsing for it. */
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualPath, setManualPath] = useState('')
 
   const refreshRoots = useCallback(async () => {
     try {
@@ -98,22 +101,59 @@ export function TreePanel(): JSX.Element {
     []
   )
 
-  const addRoot = useCallback(async () => {
-    try {
-      const picked = await window.hub.roots.pick()
-      if (!picked) return
+  const addRoot = useCallback(
+    async (picked: string) => {
+      const clean = picked.trim().replace(/[\\/]+$/, '')
+      if (clean === '') {
+        setStatus('请输入一个文件夹路径', 'warn')
+        return
+      }
       setBusy(true)
-      const root = await window.hub.roots.add(picked)
-      await refreshRoots()
-      await useTree.getState().load()
-      setStatus(`已添加根目录：${root.path}，正在扫描…`, 'info')
+      try {
+        /* `roots.add` is idempotent: adding a folder that is already a root
+         * returns the existing row without scanning. Say so instead of leaving
+         * the user staring at a tree that did not change. */
+        const already = roots.some(
+          (r) => r.path.replace(/[\\/]+$/, '').toLowerCase() === clean.toLowerCase()
+        )
+        const root = await window.hub.roots.add(clean)
+        await refreshRoots()
+        await useTree.getState().load()
+        setStatus(
+          already
+            ? `这个文件夹已经是根目录了：${root.path}`
+            : `已添加根目录：${root.path}，正在扫描…`,
+          already ? 'warn' : 'info'
+        )
+      } catch (err) {
+        setStatus(`添加根目录失败：${String(err)}`, 'error')
+      } finally {
+        setBusy(false)
+        setScanProgress(null)
+      }
+    },
+    [refreshRoots, roots, setScanProgress, setStatus]
+  )
+
+  /**
+   * The system folder picker is a native dialog: on a locked-down Windows
+   * session it can fail to appear, and the promise then never settles. The
+   * manual path box below is the way in that never depends on it, so the click
+   * only has to hand the result over.
+   */
+  const pickRoot = useCallback(async () => {
+    try {
+      setStatus('请在系统窗口里选择一个文件夹…', 'info')
+      const picked = await window.hub.roots.pick()
+      if (!picked) {
+        setStatus('没有选择文件夹。如果系统窗口没有出现，请用「手动输入路径」添加。', 'warn')
+        return
+      }
+      await addRoot(picked)
     } catch (err) {
-      setStatus(`添加根目录失败：${String(err)}`, 'error')
-    } finally {
-      setBusy(false)
-      setScanProgress(null)
+      setStatus(`打开文件夹选择框失败：${String(err)}。可以改用「手动输入路径」。`, 'error')
     }
-  }, [refreshRoots, setScanProgress, setStatus])
+  }, [addRoot, setStatus])
 
   const rescan = useCallback(
     async (rootId?: number) => {
@@ -301,7 +341,7 @@ export function TreePanel(): JSX.Element {
           className="btn btn-ghost focus-ring"
           title="添加根目录（扫描其中的项目）"
           disabled={busy}
-          onClick={() => void addRoot()}
+          onClick={() => void pickRoot()}
         >
           <Plus size={14} aria-hidden />
           根目录
@@ -376,7 +416,7 @@ export function TreePanel(): JSX.Element {
           title="还没有索引任何项目"
           description="添加一个根目录，程序会扫描其中的项目与文件夹。程序只读取磁盘，不会写入被索引的目录。"
           actionLabel="添加根目录"
-          onAction={() => void addRoot()}
+          onAction={() => void pickRoot()}
         />
       ) : (
         <NodeTree
@@ -459,6 +499,47 @@ export function TreePanel(): JSX.Element {
             ) : null}
           </ul>
         ) : null}
+
+        {/* The picker-free way to add a root. The native folder dialog is not
+            always available, and a path can simply be pasted. */}
+        <div className="px-2 pb-2">
+          <button
+            type="button"
+            className="text-[var(--font-tag)] text-[var(--text-dim)] underline-offset-2 hover:underline"
+            aria-expanded={manualOpen}
+            onClick={() => setManualOpen((v) => !v)}
+          >
+            {manualOpen ? '收起手动输入' : '手动输入路径…'}
+          </button>
+          {manualOpen ? (
+            <form
+              className="mt-1 flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const value = manualPath
+                setManualPath('')
+                void addRoot(value)
+              }}
+            >
+              <input
+                className="input focus-ring min-w-0 flex-1 text-[var(--font-minor)]"
+                type="text"
+                value={manualPath}
+                placeholder="C:\Users\你\Desktop\项目"
+                aria-label="根目录路径"
+                spellCheck={false}
+                onChange={(e) => setManualPath(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary focus-ring"
+                disabled={busy || manualPath.trim() === ''}
+              >
+                添加
+              </button>
+            </form>
+          ) : null}
+        </div>
       </div>
 
       {/* footer: 改动热力图 */}

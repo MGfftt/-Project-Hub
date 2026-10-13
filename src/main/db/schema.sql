@@ -91,3 +91,13 @@ CREATE TABLE IF NOT EXISTS task_state (
   next_run   INTEGER,
   meta       TEXT DEFAULT '{}'
 );
+
+-- 用户主动移除的路径（墓碑）。删除一个已经落库的目录只删掉这一行是不够的：
+-- 下一次扫描会从磁盘再把它建回来。这里记住路径，扫描时连同它的子目录一起跳过。
+-- 移除根目录时随 roots 级联清理，所以「移除根目录再重新添加」可以恢复。
+CREATE TABLE IF NOT EXISTS hidden_paths (
+  root_id  INTEGER NOT NULL REFERENCES roots(id) ON DELETE CASCADE,
+  path     TEXT NOT NULL,
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (root_id, path)
+) WITHOUT ROWID;
