@@ -283,4 +283,26 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 
 **Lesson.** A widget library's identity contract is not a detail. "Must return a string" was documented, load-bearing, and violated by a one-word prop; the symptom it produced — a row that paints as selected while the app never hears about it — pointed at the click handler for two rounds of probing before the prop was read. The cheap move was to read the library's own `identify()` and believe its error message.
 
+---
+
+## D-022 · A marker-less folder is a project, the map is the default view, and one click only selects
+
+**Decision.** Five changes from the same user report, all of them about what the product *does* rather than what it crashes on:
+
+1. A single click **never** opens a folder. It selects the node and shows its overview; 打开目录 stays a button on that page. Opening a folder moves to the double click, and then only for a leaf with no children to expand.
+2. With nothing selected, the middle pane is a **workspace map** — the whole tree drawn left-to-right as cards joined by connectors, zoomable, expandable in place.
+3. The timeline's scope **follows the selection**: a project shows its own changes, a group or folder shows every node in its subtree, and nothing selected shows everything.
+4. Adding a root folder makes **that folder a project even without a marker**; the walker still descends into it, so a plain folder can hold other projects.
+5. A marker that appears (or disappears) later is picked up by the next scan: `git init` inside an already-indexed folder promotes it, deleting `.git` demotes it.
+
+**Why.** The user's words were "点击这个节点的时候，会打开这个文件夹的同时会调用出它的属性" — a click was doing two things at once, one of them destructive of context (an Explorer window stealing focus) and the other desired. The same message asked for something graphical in the largest pane ("整个项目会像是一个树一样展示在用户面前"), complained that the timeline showed every node's changes no matter what was selected, and reported the scanner's hardest usability edge: "必须是带有git文件的文件夹" — a folder could not be a project until it already contained a repository, which is backwards for a tool people use to *organise* projects they are about to start.
+
+**Why these shapes.** (1) The click/double-click split keeps both gestures on one input with no modifier, and the existing 260 ms timer already distinguished them; making the single click *not* open a folder is what removes the ambiguity. (2) The map is computed, not hand-placed: a tidy left-to-right tree layout (each leaf gets a row, a parent is centred on its children) beats a force graph here because the data is already a tree and users need to *find* a node, not admire it. (3) Scoping the timeline to `descendantIds(selection)` makes "a group is a saved filter" true in the one place where it matters. (4)/(5) Making the root a node in its own right is what lets a marker-less folder be a project at all — and, once it is a node, the existing fingerprint comparison can re-classify it, so `git init` needs no new code path.
+
+**Evidence.** Verified over CDP against the real app: the default view renders 6 cards with the 项目/分组/目录 counter and no console errors; a click on a map card switches to 概览 with the node's path and figures and never opens a folder; after `mkdir plain/.git` plus a rescan, the node's `kind` flips `folder` → `project` and `meta.marker` becomes `.git`; with a node selected the timeline header reads 时间线 / src with a 清除过滤 chip instead of the whole workspace. 173 unit tests pass (one rewritten to assert the new promote *and* demote behaviour, one added for the marker-less root).
+
+**Cost.** `TreeNode` now carries `meta` (five small keys), which also fixes a latent bug: `treeIcons.markerOf()` had always read `meta.marker` through a cast, and `toTreeNode()` had never sent it, so every `auto` icon had silently fallen through to the name rules. Scans still write one row per directory; the extra write happens only when a fingerprint actually changes. `repo.pathIndex()` is still there for callers that only need ids, with `scannedIndex()` beside it for the scanner.
+
+**Lesson.** The scanner's rule — "a project is a folder with a marker" — was a reasonable *detection* heuristic that had leaked into the *product model*, where it turned into "you cannot add a folder until it is already a repository". The fix was not a better detector but anchoring the model on what the user did (they added this folder) and letting detection refine it afterwards. A heuristic should be allowed to say "not yet"; it should not be allowed to say "not allowed".
+
 

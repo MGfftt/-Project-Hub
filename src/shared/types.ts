@@ -56,6 +56,13 @@ export interface TreeNode {
   icon_type: IconType
   icon_value: string | null
   path_missing: number
+  /**
+   * Scanner fingerprint (`marker`, `projectKind`, `isGit`, `depth`, `mtime`).
+   * Carried on the tree so an `auto` icon can be chosen from the marker (§9.3)
+   * and the workspace map can tell a Git project from a plain folder without a
+   * second round-trip. Groups and hand-made nodes have `{}`.
+   */
+  meta?: Record<string, unknown>
   created_at: number
   updated_at: number
   children?: TreeNode[]

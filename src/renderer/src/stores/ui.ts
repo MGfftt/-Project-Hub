@@ -28,7 +28,9 @@ export const RIGHT_WIDTH_MIN = 280
 export const RIGHT_WIDTH_MAX = 520
 
 /** The middle column's tab. It follows the selection, so it is never "empty". */
-export type MainView = 'overview' | 'timeline'
+/* `map` is the whole-project picture — the view that needs no selection, so it
+ * is also what the middle column falls back to. */
+export type MainView = 'map' | 'overview' | 'timeline'
 export type DialogKind = 'stats' | 'icon' | 'settings' | 'confirm'
 export type StatusTone = 'info' | 'warn' | 'error'
 
@@ -102,7 +104,7 @@ async function persist(key: string, value: string): Promise<void> {
 }
 
 export const useUi = create<UiState>()((set, get) => ({
-  mainView: 'overview',
+  mainView: 'map',
   setMainView: (v) => set({ mainView: v }),
 
   selectedId: null,

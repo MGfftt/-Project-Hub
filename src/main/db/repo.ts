@@ -131,7 +131,9 @@ function buildStatements(db: DB) {
     ),
     deleteNode: db.prepare(`DELETE FROM nodes WHERE id = ?`),
     markMissing: db.prepare(`UPDATE nodes SET path_missing = ?, updated_at = ? WHERE id = ?`),
-    existingPaths: db.prepare(`SELECT id, path FROM nodes WHERE root_id = ? AND path IS NOT NULL`),
+    existingPaths: db.prepare(
+      `SELECT id, path, kind, meta FROM nodes WHERE root_id = ? AND path IS NOT NULL`
+    ),
     pathExists: db.prepare(`SELECT 1 AS ok FROM nodes WHERE id = ? AND path IS NOT NULL LIMIT 1`),
     missingCandidates: db.prepare(
       `SELECT * FROM nodes WHERE root_id = ? AND path IS NOT NULL AND path_missing = 0`
@@ -246,6 +248,21 @@ function parseTags(json: string | null): string[] {
   }
 }
 
+/**
+ * The scanner's fingerprint for a node (`marker`, `projectKind`, `isGit`,
+ * `depth`, `mtime`). It travels with the tree so the renderer can choose an
+ * `auto` icon from the marker (§9.3) and draw the map without a second query.
+ */
+function parseMeta(json: string | null): Record<string, unknown> {
+  if (!json) return {}
+  try {
+    const v = JSON.parse(json)
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
 export function toTreeNode(n: NodeRecord): TreeNode {
   return {
     id: n.id,
@@ -263,6 +280,7 @@ export function toTreeNode(n: NodeRecord): TreeNode {
     icon_type: n.icon_type,
     icon_value: n.icon_value,
     path_missing: n.path_missing,
+    meta: parseMeta(n.meta),
     created_at: n.created_at,
     updated_at: n.updated_at
   }
@@ -562,6 +580,30 @@ export const repo = {
     const out = new Map<string, number>()
     for (const r of rows<{ id: number; path: string | null }>(statements.existingPaths.all(rootId))) {
       if (r.path) out.set(pathKey(r.path), r.id)
+    }
+    return out
+  },
+
+  /**
+   * The same rows as `pathIndex`, but reporting what the last scan recorded about
+   * each node. A rescan compares against these so a folder that *gained* a marker
+   * (someone ran `git init` in it) is re-classified instead of keeping its old
+   * fingerprint forever.
+   */
+  scannedIndex(rootId: number): Map<string, { id: number; kind: string; meta: Record<string, unknown> }> {
+    dbh()
+    const out = new Map<string, { id: number; kind: string; meta: Record<string, unknown> }>()
+    for (const r of rows<{ id: number; path: string | null; kind: string; meta: string | null }>(
+      statements.existingPaths.all(rootId)
+    )) {
+      if (!r.path) continue
+      let meta: Record<string, unknown> = {}
+      try {
+        meta = r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : {}
+      } catch {
+        meta = {}
+      }
+      out.set(pathKey(r.path), { id: r.id, kind: r.kind, meta })
     }
     return out
   },

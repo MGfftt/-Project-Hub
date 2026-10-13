@@ -16,6 +16,12 @@ export interface EventsState {
   error: string | null
   filter: EventFilter
   setFilter(f: EventFilter): void
+  /**
+   * Narrow the timeline to a node and its descendants — how the selection scopes
+   * 改动时间线 — without disturbing the date or source filters the user picked.
+   * `null` widens it back to every node.
+   */
+  setScope(nodeIds: number[] | null): void
   clearFilter(): void
   load(): Promise<void>
 
@@ -39,6 +45,14 @@ export const useEvents = create<EventsState>()((set, get) => ({
 
   setFilter: (f) => {
     set({ filter: f })
+    void get().load()
+  },
+
+  setScope: (nodeIds) => {
+    const next = { ...get().filter }
+    if (nodeIds === null) delete next.nodeIds
+    else next.nodeIds = [...nodeIds]
+    set({ filter: next })
     void get().load()
   },
 

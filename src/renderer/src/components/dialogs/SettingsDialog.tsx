@@ -209,14 +209,17 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       </Section>
 
       <Section title="交互">
-        <Field label="单击打开文件夹">
+        <Field label="双击打开文件夹">
           <Toggle
             checked={clickToOpen}
             onChange={(next) => {
               setClickToOpen(next)
-              setStatus(next ? '已开启单击打开' : '已关闭单击打开，改为双击展开', 'info')
+              setStatus(
+                next ? '已开启双击打开文件夹' : '已关闭双击打开，双击只用于展开与折叠',
+                'info'
+              )
             }}
-            label="单击打开文件夹"
+            label="双击打开文件夹"
           />
         </Field>
         <Field label="关闭时隐藏到托盘">

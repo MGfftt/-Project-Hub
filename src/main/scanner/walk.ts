@@ -154,7 +154,24 @@ export async function* walkProjectTree(options: WalkOptions): AsyncGenerator<Sca
         isGit: marker.kind === 'git' || marker.marker === '.git'
       })
     } else {
-      if (current.depth > 0) {
+      /* The root is whatever the user added — a project in its own right, whether
+       * or not it carries a marker yet. It still descends, so a plain folder can
+       * hold other projects underneath it, and so a `git init` that happens later
+       * is picked up by the next scan instead of being invisible for ever. */
+      if (current.depth === 0) {
+        totals.projects += 1
+        pending.push({
+          path: current.path,
+          parentPath: null,
+          depth: 0,
+          name: current.name,
+          kind: 'project',
+          marker: null,
+          projectKind: null,
+          mtime: st.mtimeMs,
+          isGit: false
+        })
+      } else {
         totals.folders += 1
         pending.push({
           path: current.path,

@@ -185,11 +185,17 @@ project-hub/
 
 ### 10. 界面速览
 
-窗口默认是**左树 + 中内容**两栏。左栏是项目树：每一行左侧的 `›` / `⌄` 展开折叠，缩进参考线标出层级，折叠的父节点会显示它藏了多少个子节点。**单击任意一行**，中间栏立刻切换到该节点的「概览」页——名称、类型、磁盘路径、常用操作（打开目录 / 在文件夹中显示 / 复制路径 / 重命名 / 统计）、八项关键数字，以及它自己的**子树**：同样是缩进的树状列表，可逐支折叠，单击任意一行就跳到那个节点。
+**没选中任何节点时，中间的整块区域是一张全景图**：所有根目录、分组和子目录从左到右排成一张树状图，卡片之间用连线相接。每张卡片显示图标、名称、类型和直接子节点数，右上角的圆点表示状态；点卡片左上角的 `⌄` / `›` 就地展开或收起一个分支，滚轮缩放、`Shift + 滚轮` 横向滚动、右上角的 `⤢` 一键适配窗口。顶部的计数条实时显示「项目 / 分组 / 目录」各有多少。
 
-中间栏顶部是 `概览` 与 `改动时间线` 两个页签；最右侧的 `属性` 开关控制第三栏，用来改状态、图标和标签。默认收起，所以窗口只有两栏，界面更干净。
+窗口本身是**左树 + 中内容**两栏。左栏是项目树：每一行左侧的 `›` / `⌄` 展开折叠，缩进参考线标出层级，折叠的父节点会显示它藏了多少个子节点。中间栏顶部是 `全景图` / `概览` / `改动时间线` 三个页签；最右侧的 `属性` 开关控制第三栏，用来改状态、图标和标签，默认收起。
 
-要看提交历史，切到「改动时间线」，或在项目上右键选「查看改动」。全部数据与设置都在 `%APPDATA%\project-hub\`。
+**单击**树里的任意一行、或全景图里的任意一张卡片，都只会**选中**它并显示它的「概览」页——名称、类型、磁盘路径、常用操作（打开目录 / 在文件夹中显示 / 复制路径 / 重命名 / 统计）、八项关键数字，以及它自己的**子树**（同样是缩进的树状列表，可逐支折叠，单击一行就跳到那个节点）。单击永远**不会**打开文件夹，打开目录是概览页里的一个按钮。**双击**一行才会展开或折叠它；双击一个没有子节点的叶子（一个真正的项目或空目录）才会在资源管理器里打开它。这一行为可在设置里关掉。
+
+「改动时间线」的范围跟着选中项走：选中一个项目就只看它的改动，选中一个分组或文件夹就看它整棵子树里所有节点的改动，什么都没选中时就是整个工作区。
+
+添加根目录时，**一个普通文件夹本身就是一个项目**，不需要先有 `.git`、`package.json` 之类的标记文件。这样的文件夹同时会继续向下扫描，所以它里面可以再放别的项目；哪天在它里面 `git init`，下一次扫描或刷新就会把它识别成 Git 项目，而不需要重新添加节点。
+
+全部数据与设置都在 `%APPDATA%\project-hub\`。
 
 ---
 
@@ -360,11 +366,17 @@ All application data always lives in `%APPDATA%\project-hub\`, regardless of whe
 
 ### 10. Interface tour
 
-The window opens as two columns: **tree on the left, content in the middle**. In the tree the `›` / `⌄` on each row expands or collapses it, indent guides mark the levels, and a collapsed parent shows how many children it hides. **A single click on any row** switches the middle column to that node's overview — name, kind, disk path, the usual actions (open folder / reveal in Explorer / copy path / rename / stats), eight key figures, and the node's own **subtree**: an indented, foldable tree whose rows jump to that node when clicked.
+**With nothing selected, the whole middle pane is a workspace map**: every root, group and subfolder laid out left to right as a tree of cards joined by connector lines. Each card shows its icon, name, kind and direct-child count, with a status dot in the corner. The `⌄` / `›` on a card expands or collapses that branch in place — wheel to zoom, `Shift + wheel` to pan, and `⤢` fits the map to the window. The strip along the top counts projects, groups and folders live.
 
-The middle column carries `概览` (overview) and `改动时间线` (change timeline) tabs, and `属性` (properties) on the right toggles a third column for status, icon and tags. It starts folded, so the default window stays a clean two-column view.
+The window itself is two columns: **tree on the left, content in the middle**. In the tree the `›` / `⌄` on each row expands or collapses it, indent guides mark the levels, and a collapsed parent shows how many children it hides. The middle column carries `全景图` (map) / `概览` (overview) / `改动时间线` (timeline) tabs, and `属性` (properties) on the right toggles a third column for status, icon and tags — folded by default.
 
-To read commit history, switch to the change-timeline tab or right-click a project and pick 查看改动. All data and settings live in `%APPDATA%\project-hub\`.
+**A single click** on a tree row, or on a map card, only *selects* it and shows its overview page — name, kind, disk path, the usual actions (open folder / reveal in Explorer / copy path / rename / stats), eight key figures, and the node's own **subtree** (an indented, foldable tree whose rows jump to that node when clicked). A single click never opens a folder; 打开目录 is a button on the overview page. A **double click** expands or collapses the row, and only opens a leaf that has no children (a real project or an empty folder) in Explorer. The setting can turn that off.
+
+The timeline's scope follows the selection: pick one project and you see that project's changes, pick a group or a folder and you see every node in its subtree, and with nothing selected you see the entire workspace.
+
+When you add a root folder, **a plain folder is a project in its own right** — it needs no `.git` or `package.json` marker first. Such a folder is still walked into, so it can hold other projects; if you later run `git init` inside it, the next scan or refresh picks that up and reclassifies it, with no need to re-add the node.
+
+All data and settings live in `%APPDATA%\project-hub\`.
 
 ---
 

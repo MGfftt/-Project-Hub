@@ -52,7 +52,10 @@ export async function scanRoot(options: IndexOptions): Promise<ScanResult> {
 
   const root = normalizePath(rootPath)
   // Path -> nodeId for every node under this root, loaded once (WAL snapshot).
-  const byPath = repo.pathIndex(rootId)
+  // `scannedIndex` also carries what the last scan stored, so a folder that
+  // changed kind since then (a `git init` inside it, or a `.git` that went away)
+  // is re-classified instead of keeping its old fingerprint for ever.
+  const existing = repo.scannedIndex(rootId)
   const seen = new Set<string>()
 
   let projects = 0
@@ -85,7 +88,7 @@ export async function scanRoot(options: IndexOptions): Promise<ScanResult> {
     if (batch.truncated) truncated = true
     skipped += batch.skipped.length
 
-    const applied = applyBatch(db, rootId, root, byPath, batch)
+    const applied = applyBatch(db, rootId, existing, batch)
     projects += applied.projects
     folders += applied.folders
     seen.add(pathKey(root))
@@ -127,11 +130,13 @@ interface BatchOutcome {
   folders: number
 }
 
+/** One row of `repo.scannedIndex`: the node plus what the previous scan stored. */
+type ScannedNode = { id: number; kind: string; meta: Record<string, unknown> }
+
 function applyBatch(
   db: DB,
   rootId: number,
-  root: string,
-  byPath: Map<string, number>,
+  existing: Map<string, ScannedNode>,
   batch: ScanBatch
 ): BatchOutcome {
   let projects = 0
@@ -139,27 +144,58 @@ function applyBatch(
 
   const write = (): void => {
     for (const dir of batch.dirs) {
-      const parentId = dir.parentPath === null ? null : (byPath.get(pathKey(dir.parentPath)) ?? null)
+      const parentId =
+        dir.parentPath === null ? null : (existing.get(pathKey(dir.parentPath))?.id ?? null)
       const key = pathKey(dir.path)
-      const existingId = byPath.get(key)
+      const prev = existing.get(key)
 
-      if (existingId !== undefined) {
-        // Already indexed: refresh the cheap fields only. Annotations
+      if (prev !== undefined) {
+        // Already indexed: refresh the filesystem-derived fields only. Annotations
         // (note/display_name/icon/tags/color) are never touched by a rescan.
+        const nextMeta = {
+          marker: dir.marker,
+          projectKind: dir.projectKind,
+          isGit: dir.isGit,
+          depth: dir.depth,
+          mtime: Math.round(dir.mtime)
+        }
+        /* Kind is not permanent: running `git init` inside an already-indexed
+         * folder turns it into a project, and deleting `.git` turns it back into
+         * a plain folder. Compare the fingerprint the last scan left behind and
+         * only pay for the extra write when something actually moved. */
+        const metaChanged =
+          prev.kind !== dir.kind ||
+          prev.meta.marker !== dir.marker ||
+          prev.meta.projectKind !== dir.projectKind ||
+          prev.meta.isGit !== dir.isGit
         try {
-          db.prepare(
-            `UPDATE nodes
-                SET parent_id = @parent_id,
-                    kind      = CASE WHEN nodes.kind = 'project' THEN nodes.kind ELSE @kind END,
-                    path_missing = 0,
-                    updated_at = @updated_at
-              WHERE id = @id`
-          ).run({
-            id: existingId,
-            parent_id: parentId,
-            kind: dir.kind,
-            updated_at: Date.now()
-          })
+          if (metaChanged) {
+            db.prepare(
+              `UPDATE nodes
+                  SET parent_id = @parent_id,
+                      kind      = @kind,
+                      meta      = @meta,
+                      path_missing = 0,
+                      updated_at = @updated_at
+                WHERE id = @id`
+            ).run({
+              id: prev.id,
+              parent_id: parentId,
+              kind: dir.kind,
+              meta: JSON.stringify(nextMeta),
+              updated_at: Date.now()
+            })
+            prev.kind = dir.kind
+            prev.meta = nextMeta
+          } else {
+            db.prepare(
+              `UPDATE nodes
+                  SET parent_id = @parent_id,
+                      path_missing = 0,
+                      updated_at = @updated_at
+                WHERE id = @id`
+            ).run({ id: prev.id, parent_id: parentId, updated_at: Date.now() })
+          }
         } catch (err) {
           log.warn('update during scan failed', { path: dir.path, err: (err as Error).message })
         }
@@ -173,14 +209,15 @@ function applyBatch(
         })
         // `meta` carries the marker/project-kind so the renderer can pick an icon
         // without re-reading the filesystem (§9.3 `auto` icon type).
-        repo.setMeta(id, {
+        const meta = {
           marker: dir.marker,
           projectKind: dir.projectKind,
           isGit: dir.isGit,
           depth: dir.depth,
           mtime: Math.round(dir.mtime)
-        })
-        byPath.set(key, id)
+        }
+        repo.setMeta(id, meta)
+        existing.set(key, { id, kind: dir.kind, meta })
       }
 
       if (dir.kind === 'project') projects += 1
@@ -199,17 +236,33 @@ function applyBatch(
     write()
   }
 
-  void root
   return { projects, folders }
 }
 
 /**
  * Mark nodes whose paths are gone. Returns how many rows changed.
  * A node is only marked when its own path is missing from the walk AND it is not
- * an ancestor-style group node (groups have `path === null`).
+ * an ancestor-style group node (groups have `path === null`), AND it does not sit
+ * inside a project that is still on disk: a project is a leaf for the walker, so
+ * nothing under it is ever reported as seen.
  */
 function markMissing(db: DB, rootId: number, seen: Set<string>): number {
   const candidates = repo.missingCandidates(rootId)
+  const byId = new Map(candidates.map((n) => [n.id, n]))
+  const insideProject = (node: (typeof candidates)[number]): boolean => {
+    let cursor = node.parent_id
+    for (let guard = 0; cursor != null && guard < 128; guard += 1) {
+      const parent = byId.get(cursor)
+      if (!parent) return false
+      // `parent_id !== null` keeps the root itself out: the root is a project by
+      // definition (§7.1), and everything under it would otherwise be exempt.
+      if (parent.kind === 'project' && parent.parent_id !== null && parent.path_missing === 0) {
+        return true
+      }
+      cursor = parent.parent_id
+    }
+    return false
+  }
   let changed = 0
   const stmt = db.prepare(
     `UPDATE nodes SET path_missing = 1, updated_at = @updated_at WHERE id = @id`
@@ -218,6 +271,7 @@ function markMissing(db: DB, rootId: number, seen: Set<string>): number {
   const tx = db.transaction(() => {
     for (const node of candidates) {
       if (!node.path) continue
+      if (insideProject(node)) continue
       const present = seen.has(pathKey(node.path))
       if (!present && node.path_missing === 0) {
         stmt.run({ id: node.id, updated_at: Date.now() })

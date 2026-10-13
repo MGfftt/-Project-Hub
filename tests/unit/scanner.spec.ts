@@ -217,14 +217,37 @@ describe('scanRoot', () => {
     expect(after.tags).toBe(JSON.stringify(['core']))
   })
 
-  it('never promotes a project node back to group on rescan', async () => {
-    sb.file('projects/alpha/package.json', '{}')
-    const root = repo.addRoot(sb.dir('projects'))
-    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+  it('re-classifies a node when its marker appears or disappears (D-022)', async () => {
     const { rmSync } = await import('node:fs')
+    const root = repo.addRoot(sb.dir('projects'))
+    /* A plain folder the user added: it is a project in its own right and it
+     * still descends, so `alpha` is indexed as an ordinary folder. */
+    sb.dir('projects/alpha/src')
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+    const alphaPath = join(sb.root, 'projects', 'alpha')
+    expect(repo.getNodeByPath(alphaPath)!.kind).toBe('folder')
+
+    /* Someone runs `git init` (or drops a package.json) in it. The next scan
+     * must promote it — the folder did not become invisible to the walker. */
+    sb.file('projects/alpha/package.json', '{}')
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4, incremental: true })
+    expect(repo.getNodeByPath(alphaPath)!.kind).toBe('project')
+
+    /* And removing the marker demotes it again instead of pinning it for ever. */
     rmSync(join(sb.root, 'projects', 'alpha', 'package.json'))
     await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4, incremental: true })
-    expect(repo.getNodeByPath(join(sb.root, 'projects', 'alpha'))!.kind).toBe('project')
+    expect(repo.getNodeByPath(alphaPath)!.kind).toBe('folder')
+  })
+
+  it('indexes a root that carries no marker as a project node (§7.1)', async () => {
+    sb.dir('plain/inner')
+    const root = repo.addRoot(sb.dir('plain'))
+    await scanRoot({ rootId: root.id, rootPath: root.path, maxDepth: 4 })
+    const plain = repo.getNodeByPath(sb.dir('plain'))!
+    expect(plain.kind).toBe('project')
+    expect(plain.path_missing).toBe(0)
+    // It still descends: a marker-less root can hold whole projects underneath.
+    expect(repo.getNodeByPath(join(sb.root, 'plain', 'inner'))!.kind).toBe('folder')
   })
 
   it('emits progress without flooding the caller', async () => {

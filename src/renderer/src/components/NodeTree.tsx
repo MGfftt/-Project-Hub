@@ -108,7 +108,7 @@ export function NodeTree({
     })
   }, [])
 
-  const canOpen = useCallback(
+  const canOpenFolder = useCallback(
     (node: TreeNode): boolean =>
       clickToOpen && !(node.kind === 'group' && !node.path) && node.path_missing !== 1,
     [clickToOpen]
@@ -131,34 +131,37 @@ export function NodeTree({
   /**
    * Every click and every Space/Enter activation lands here (NodeRow stops the
    * library's own key handling so the two cannot both act on one key press).
+   *
+   * A single click only selects — it never opens a folder. Opening is an
+   * explicit action: the overview names it 打开目录, and the double click below
+   * is the shortcut for it.
    */
   const handleActivate = useCallback(
     (node: NodeApi<TreeNode>, source: 'click' | 'key') => {
       const data = node.data
       if (source === 'key') {
-        if (node.isLeaf) {
-          if (canOpen(data)) openFolder(data)
-        } else {
+        if (!node.isLeaf) {
           node.toggle()
           if (!node.isOpen) requestStats(data.id)
+        } else if (canOpenFolder(data)) {
+          openFolder(data)
         }
         return
       }
 
-      /* click: a second activation within the double-click window means the user
-         is opening a branch, so the pending folder-open is dropped. */
+      /* A second activation inside the double-click window means the user wants
+         the branch toggled, or — on a leaf — the folder opened. */
       if (clickTimer.current != null) {
         cancelPendingOpen()
         if (!node.isLeaf) node.toggle()
+        else if (canOpenFolder(data)) openFolder(data)
         return
       }
-      if (!canOpen(data)) return
       clickTimer.current = window.setTimeout(() => {
         clickTimer.current = null
-        openFolder(data)
       }, CLICK_OPEN_DELAY_MS)
     },
-    [canOpen, cancelPendingOpen, openFolder, requestStats]
+    [canOpenFolder, cancelPendingOpen, openFolder, requestStats]
   )
 
   /* True while the sync effect below is replaying the store onto the library.

@@ -5,16 +5,17 @@ import { useTree } from '@renderer/stores/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useUi } from '@renderer/stores/ui'
 import {
+  descendantIds,
   flattenVisible,
   indexOfId,
   rootIdOf
 } from '@renderer/lib/tree'
 import TreePanel from '@renderer/components/TreePanel'
 import Timeline from '@renderer/components/Timeline'
+import ProjectMap from '@renderer/components/ProjectMap'
 import NodeOverview from '@renderer/components/NodeOverview'
 import DetailPanel from '@renderer/components/DetailPanel'
 import StatusBar from '@renderer/components/StatusBar'
-import EmptyState from '@renderer/components/EmptyState'
 import SettingsDialog from '@renderer/components/dialogs/SettingsDialog'
 import StatsDialog from '@renderer/components/dialogs/StatsDialog'
 import IconPicker from '@renderer/components/dialogs/IconPicker'
@@ -60,6 +61,21 @@ export function AppShell(): JSX.Element {
   useEffect(() => {
     void useUi.getState().hydrate()
   }, [])
+
+  /* --- the timeline's scope follows the selection -------------------------- */
+  /* 改动时间线 always shows the selection's whole subtree: click one project and
+   * you see that project alone, click a group (or any folder) and you see every
+   * node inside it, and with nothing selected you see the entire workspace.
+   * Applied while the timeline is on screen — it is the only consumer, and this
+   * keeps a selection click on the map from reloading 5000 rows in the
+   * background. Reading `byId` through `getState()` keeps the effect keyed on the
+   * selection alone, so an unrelated rescan cannot overwrite the user's choice. */
+  useEffect(() => {
+    if (mainView !== 'timeline') return
+    const tree = useTree.getState()
+    const node = selectedId == null ? null : (tree.byId.get(selectedId) ?? null)
+    useEvents.getState().setScope(node ? descendantIds(node, tree.byId) : null)
+  }, [selectedId, mainView])
 
   /* --- broadcast channels ------------------------------------------------- */
   useEffect(() => {
@@ -288,6 +304,16 @@ export function AppShell(): JSX.Element {
             <button
               type="button"
               role="tab"
+              aria-selected={mainView === 'map'}
+              className={mainView === 'map' ? 'btn btn-primary' : 'btn btn-ghost'}
+              title="把整个项目库画成一棵树，不需要先选中节点"
+              onClick={() => setMainView('map')}
+            >
+              全景图
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={mainView === 'overview'}
               className={mainView === 'overview' ? 'btn btn-primary' : 'btn btn-ghost'}
               onClick={() => setMainView('overview')}
@@ -321,17 +347,12 @@ export function AppShell(): JSX.Element {
             </button>
           </div>
 
-          {selected ? (
-            mainView === 'timeline' ? (
-              <Timeline />
-            ) : (
-              <NodeOverview node={selected} />
-            )
+          {mainView === 'timeline' ? (
+            <Timeline />
+          ) : mainView === 'overview' && selected ? (
+            <NodeOverview node={selected} />
           ) : (
-            <EmptyState
-              title="还没有选中任何节点"
-              description="在左侧项目树里点一个项目或分组，这里会显示它的概览；需要看改动就切到「改动时间线」。"
-            />
+            <ProjectMap />
           )}
         </main>
 
