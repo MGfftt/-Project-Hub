@@ -216,4 +216,34 @@ LOAD_FAIL Could not locate the bindings file. Tried: …
 
 **Guard.** `tests/unit/git.spec.ts` → 'a nested folder does not inherit the history of an enclosing repo (§14.1)' asserts that a folder inside a real repository reports `isRepo: false` and yields no log entries, while the enclosing repository itself stays readable.
 
+---
+
+## D-018 · The app icon is generated from code, and packaging has a no-sign fallback
+
+**Decision.** `scripts/make-icon.mjs` draws the same three-hub mark the tray uses (`src/main/tray/icon.ts`) into an RGBA buffer with 4× supersampling, encodes PNGs through `node:zlib`, and wraps them in an ICO container written by hand. `npm run make:icon` regenerates `build/icon.ico` (16/24/32/48/64/128/256) and `build/icon.png`. No image library is added.
+
+**Why.** §0.1 requires every dependency to justify itself, and the icon is geometry. Hand-writing the PNG and ICO containers costs about 120 lines of well-understood format code and keeps the dependency count where it is. Shipping Electron's default icon was not acceptable for an app that lives in the tray and on the desktop.
+
+**Second decision in the same area.** `electron-builder.yml` is left exactly as a normal project would have it. On hosts where Windows cannot create symbolic links (no Developer Mode, no elevation), electron-builder's Windows sign stage cannot unpack `winCodeSign`: 7-Zip must recreate two macOS dylib symlinks inside it and fails with `Cannot create symbolic link : 客户端没有所需的特权`. That stage also performs the `rcedit` icon/metadata stamping, so the failure costs both the installer *and* the exe branding. `.builder.nosign.yml` covers that case — it extends the real config with `win.signAndEditExecutable: false`, after which the exe is stamped by a manual `rcedit` pass and the installer is built from the result with `--prepackaged`.
+
+**Cost.** The workaround is three commands instead of one, and it is specific to this class of host. `npm run build:win` stays the single command everywhere else. Because the flag lives in a separate config file rather than the committed one, a build on an unrestricted machine keeps full stamping with no edits.
+
+**Lesson.** A packaging failure that reports a *download* problem can still be a *privilege* problem: the archive was fine, the ability to extract it was not. Checking whether the produced exe carried the expected metadata (`ProductName: Electron` was the tell) located the real scope of the damage.
+
+---
+
+## D-019 · NFR-02 is not met: the renderer is not reclaimed while the window is open
+
+**Decision.** Ship v2.0 with the renderer alive for as long as the app runs, and record the measured resident memory honestly as a miss (393.7 MB against a 220 MB budget) rather than re-labeling the budget or quietly omitting the row.
+
+**Why.** The measurement is unambiguous and reproducible: the packaged `Project Hub.exe`, `--no-sandbox`, window open, sampled after 30 seconds idle, reports four processes — main ~152 MB, renderer ~107 MB, GPU and utility ~130 MB, total 393.7 MB. Idle CPU in the same run was 0.018% of 32 cores, so the miss is specifically memory, and it comes from Chromium rather than from application code: the main process holds the SQLite connection, the file watchers and the scheduler, none of which are large.
+
+Two caveats make the number pessimistic, and neither is strong enough to claim the budget is met: this host has no usable GPU (so software rendering and its buffers are counted here) and its Chromium sandbox cannot initialise, so the app is launched with `--no-sandbox`, which changes how work is distributed across processes. A normal desktop would very likely be lower — but nothing measured supports "under 220 MB".
+
+**The real fix, not taken here.** Reclaim the renderer while the app is hidden: destroy the window's `webContents` when it is closed to the tray and rebuild it on demand from the tray menu. The app is tray-resident by design (R6), and the window is hidden most of the time, so this is the natural shape — but it changes the lifecycle the renderer components rely on (stores rehydrate from scratch on every reveal, an in-flight inline rename or note draft would be lost), which makes it a product decision rather than an optimisation. It is left for a follow-up with the trade-off stated up front.
+
+**Cost.** R5 ("low resource use") is only partly satisfied: CPU, disk and database all have wide margins (0.018% idle CPU; 19.37 MB against a 50 MB budget; 76 ms to scan 10,200 files), but resident memory does not. The README's performance table shows the failing row rather than hiding it, and the manual-acceptance list no longer asks a human to "check memory" as though the answer were unknown.
+
+**Lesson.** A non-functional target that cannot be measured automatically is easy to leave as an aspiration. Running the packaged binary and reading the process table took ten minutes and turned an assumption into a number — which then had to be reported as a failure. That is the point of measuring it.
+
 

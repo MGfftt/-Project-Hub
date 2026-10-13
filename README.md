@@ -85,10 +85,34 @@ npm start                                  # 等价于 electron-vite preview
 打包安装包：
 
 ```bash
-npm run build:win     # Windows
+npm run build:win     # Windows → release/Project Hub-2.0.0-win-x64.exe
 npm run build:mac     # macOS
 npm run build:linux   # Linux
 ```
+
+安装包会创建桌面与开始菜单快捷方式，也可以直接使用免安装目录 `release/win-unpacked/`（双击里面的 `Project Hub.exe` 即可运行）。
+
+应用图标不是二进制素材，而是由代码画出来的：`scripts/make-icon.mjs` 复用托盘那枚三节点标记，4 倍超采样后手写 PNG 与 ICO 容器，产物落在 `build/icon.ico`。改图标只需改脚本再跑一次：
+
+```bash
+npm run make:icon
+```
+
+> **在无法创建符号链接的 Windows 上打包。** 若系统未开启「开发者模式」且当前 shell 没有管理员权限，electron-builder 的签名阶段无法解包 `winCodeSign`（7-Zip 需要在其中还原两个 macOS dylib 符号链接，会报 `Cannot create symbolic link : 客户端没有所需的特权`）。该阶段同时负责写入 exe 的图标与版本信息，所以失败会同时丢掉安装包**和** exe 的品牌信息。此时改用：
+>
+> ```bash
+> npm run build:win:nosign
+> ```
+>
+> 它会依次：跳过签名阶段打包免安装目录 → 用 rcedit 补上图标与版本信息 → 用已盖好章的目录生成 NSIS 安装包。三条命令都封装在 `scripts/pack-win.mjs` 里，产物同样是 `release/Project Hub-2.0.0-win-x64.exe`。
+>
+> 该脚本还会把 electron-builder 的下载缓存从 `%LOCALAPPDATA%` 改到项目的 `.cache/`，并把 `7zip-bin` 自带的 `7za.exe` 加进 `PATH` —— 这两件事在受限机器上都会致命。若网络需要代理，先设置标准代理变量（app-builder 是 Go 程序，会读 `HTTPS_PROXY`）：
+>
+> ```bash
+> HTTPS_PROXY=http://127.0.0.1:7897 npm run build:win:nosign
+> ```
+>
+> 仓库自带的 `electron-builder.yml` 不含任何 workaround，换一台机器直接 `npm run build:win` 即可获得完整效果。
 
 ### 5. 性能预算实测
 
@@ -98,10 +122,14 @@ npm run build:linux   # Linux
 | --- | --- | --- | --- | --- |
 | NFR-05 | 扫描 10,000 个文件 | < 3,000 ms | **76 ms**（10,200 文件 / 200 个项目 / 211 目录） | ✅ 约 40× 余量 |
 | NFR-09 | 1,000 个项目 + 100,000 条改动 | < 50 MB | **19.37 MB** | ✅ 约 2.6× 余量 |
+| NFR-03 | 空闲 CPU | < 0.3% | **0.018%**（32 核，8 秒采样） | ✅ 约 17× 余量 |
+| NFR-02 | 常驻内存 | < 220 MB | **393.7 MB**（4 个进程，窗口打开） | ❌ **未达标，约 1.8×** |
 
 渲染进程产物在把 `lucide-react` 的命名空间导入换成静态图标表之后，从 **1,618.94 kB 降到 713.08 kB**（见 `DECISIONS.md` D-011），直接服务于 NFR-01 冷启动预算。
 
-其余预算项（NFR-02 常驻内存 < 220 MB、NFR-03 空闲 CPU < 0.3%、NFR-04 空闲磁盘 I/O 近零）需要在真实桌面会话中测量，见「手动验收」。
+> **关于 NFR-02。** 上表内存数字来自打包后的 `Project Hub.exe`（`release/win-unpacked/`），在本机以 `--no-sandbox` 启动、窗口打开、空闲 30 秒后采样。它**超出预算约 1.8 倍**，需要如实记录：Electron 的 Chromium 自身就占掉大头，四个进程里主进程约 152 MB、渲染进程约 107 MB、GPU/工具进程合计约 130 MB。本机没有可用的 GPU、且必须关闭 Chromium 沙箱，这两个因素都会让内存高于正常桌面环境，因此这个数字**偏悲观**，但也**没有证据表明正常环境能降到 220 MB 以内**。若要真正达标，需要走「窗口隐藏后回收渲染进程」的路线（窗口关闭即 `webContents` 释放、只在需要时重建），这是产品决策而非小改动 —— 记在 `DECISIONS.md` D-019，未在本版实施。
+
+其余预算项（NFR-04 空闲磁盘 I/O 近零）需要长时间挂机观察，见「手动验收」。
 
 ### 6. 目录结构
 
@@ -126,8 +154,11 @@ project-hub/
 │  │     └─ lib/               格式化、配色、图标推断
 │  └─ shared/                  主/渲染共享的纯数据与纯函数（types、channels、icons、match）
 ├─ tests/unit/                 171 个单元测试，含对抗性数据隔离测试
-├─ scripts/                    基准、fixture 生成、schema 同步、编码修复
-└─ docs/                       数据隔离说明、渲染进程接口契约
+├─ scripts/                    基准、fixture 生成、schema 同步、图标生成、编码修复、打包兜底
+├─ build/                      icon.ico / icon.png（由 scripts/make-icon.mjs 生成，非二进制素材）
+├─ docs/                       数据隔离说明、渲染进程接口契约
+├─ electron-builder.yml        打包配置
+└─ .builder.nosign.yml         无符号链接权限环境的打包兜底（见第 4 节）
 ```
 
 ### 7. 手动验收（需要真实桌面会话）
@@ -138,7 +169,7 @@ project-hub/
 2. **R2 / 单击打开**：单击一个真实项目节点，文件管理器应打开该目录；路径缺失的节点应在状态栏显示「路径不存在」。
 3. **R3 / 右键菜单**：九项顺序与可用性；「查看改动」应切到时间线并带上面包屑与「清除过滤」。
 4. **R6 / 托盘**：关闭窗口应隐藏而非退出；托盘菜单可暂停/继续后台维护、立即同步 Git；退出需从托盘菜单走。
-5. **NFR-02/03/04**：任务管理器观察空闲内存、CPU 与磁盘 I/O。
+5. **NFR-04**：挂机观察磁盘 I/O 是否接近零（本版用递归 `setTimeout` 而非轮询，理论上应为零）。内存与 CPU 已实测，见第 5 节。
 
 ### 8. 已知偏差
 
@@ -219,10 +250,28 @@ npm start                                  # same as electron-vite preview
 Packaging:
 
 ```bash
-npm run build:win     # Windows
+npm run build:win     # Windows → release/Project Hub-2.0.0-win-x64.exe
 npm run build:mac     # macOS
 npm run build:linux   # Linux
 ```
+
+The installer creates desktop and Start Menu shortcuts; `release/win-unpacked/` is a portable copy you can run directly by double-clicking `Project Hub.exe`.
+
+The application icon is not a binary asset — it is drawn by code. `scripts/make-icon.mjs` reuses the three-hub mark from the tray, supersamples it 4×, and writes the PNG and ICO containers by hand into `build/icon.ico`. To change the icon, edit that script and re-run:
+
+```bash
+npm run make:icon
+```
+
+> **Packaging on Windows without symlink privileges.** If Developer Mode is off and the shell is not elevated, electron-builder's sign stage cannot unpack `winCodeSign`: 7-Zip has to recreate two macOS dylib symlinks inside it and fails with `Cannot create symbolic link`. That same stage writes the exe icon and version strings, so the failure costs both the installer *and* the exe branding. Use:
+>
+> ```bash
+> npm run build:win:nosign
+> ```
+>
+> It packs the app with the sign stage disabled, stamps the exe through app-builder's built-in rcedit, then builds the NSIS installer from the stamped directory. All three steps live in `scripts/pack-win.mjs` and produce the same `release/Project Hub-2.0.0-win-x64.exe`.
+>
+> The committed `electron-builder.yml` contains no workaround: on an unrestricted machine, `npm run build:win` alone gives the full result.
 
 ### 5. Measured performance budget
 
@@ -232,10 +281,14 @@ npm run build:linux   # Linux
 | --- | --- | --- | --- | --- |
 | NFR-05 | Scan 10,000 files | < 3,000 ms | **76 ms** (10,200 files / 200 projects / 211 dirs) | ✅ ~40× headroom |
 | NFR-09 | 1,000 projects + 100,000 events | < 50 MB | **19.37 MB** | ✅ ~2.6× headroom |
+| NFR-03 | Idle CPU | < 0.3% | **0.018%** (32 cores, 8 s sample) | ✅ ~17× headroom |
+| NFR-02 | Idle RSS | < 220 MB | **393.7 MB** (4 processes, window open) | ❌ **missed, ~1.8× over** |
 
 Replacing the `lucide-react` namespace import with a static icon table shrank the renderer bundle from **1,618.94 kB to 713.08 kB** (see `DECISIONS.md` D-011), which directly serves the NFR-01 cold-start budget.
 
-The remaining budgets (NFR-02 idle RSS < 220 MB, NFR-03 idle CPU < 0.3%, NFR-04 near-zero idle disk I/O) need a real desktop session — see "Manual acceptance".
+> **On NFR-02.** The memory figure above comes from the packaged `Project Hub.exe` (`release/win-unpacked/`), launched with `--no-sandbox`, window open, sampled after 30 seconds idle. It is **about 1.8× over budget** and is recorded as such: Chromium itself accounts for most of it — of the four processes, main is ~152 MB, the renderer ~107 MB, and the GPU/utility processes ~130 MB together. This host has no usable GPU and requires the Chromium sandbox to be disabled, both of which push memory above a normal desktop, so the number is **pessimistic** — but there is **no evidence that a normal desktop would come in under 220 MB**. Truly meeting the budget means reclaiming the renderer process while the window is hidden (destroy `webContents` on close, rebuild on demand), which is a product decision rather than a small change. Recorded as `DECISIONS.md` D-019 and not implemented in this version.
+
+The remaining budget (NFR-04 near-zero idle disk I/O) needs a long idle observation — see "Manual acceptance".
 
 ### 6. Directory layout
 
@@ -260,8 +313,11 @@ project-hub/
 │  │     └─ lib/               formatting, colours, icon inference
 │  └─ shared/                  pure data and pure functions shared by main and renderer
 ├─ tests/unit/                 171 unit tests, including the adversarial isolation suite
-├─ scripts/                    benchmarks, fixture generation, schema sync, encoding repair
-└─ docs/                       data-isolation notes, renderer interface contract
+├─ scripts/                    benchmarks, fixture generation, schema sync, icon generation, encoding repair, packaging fallback
+├─ build/                      icon.ico / icon.png (generated by scripts/make-icon.mjs, not binary assets)
+├─ docs/                       data-isolation notes, renderer interface contract
+├─ electron-builder.yml        packaging config
+└─ .builder.nosign.yml         packaging fallback for hosts without symlink privileges (see section 4)
 ```
 
 ### 7. Manual acceptance (needs a real desktop session)
@@ -272,7 +328,7 @@ These cannot be automated headlessly and need a human:
 2. **R2 / open on click**: clicking a real project node should open that directory in the file manager; a node whose path vanished should report 「路径不存在」 in the status bar.
 3. **R3 / context menu**: the nine items, their order and their availability; "view changes" should switch to the timeline with a breadcrumb and a 「清除过滤」 affordance.
 4. **R6 / tray**: closing the window should hide, not quit; the tray menu pauses/resumes background maintenance and syncs git on demand; quitting goes through the tray menu.
-5. **NFR-02/03/04**: observe idle memory, CPU and disk I/O in Task Manager.
+5. **NFR-04**: leave it idle and watch disk I/O stay near zero (this build uses recursive `setTimeout` instead of polling, so it should be). Memory and CPU are measured — see section 5.
 
 ### 8. Known deviations
 

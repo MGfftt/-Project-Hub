@@ -1,0 +1,11 @@
+# Throwaway config used only for local packaging on this host.
+#
+# `signAndEditExecutable: false` skips electron-builder's Windows rcedit/sign
+# stage, which here cannot fetch `winCodeSign` (extracting that archive needs the
+# symlink privilege, i.e. Developer Mode or an elevated shell). The stamping is
+# replaced by a manual rcedit pass. `electron-builder.yml` itself stays untouched
+# so a normal build elsewhere keeps full icon/metadata stamping.
+extends: ./electron-builder.yml
+
+win:
+  signAndEditExecutable: false
