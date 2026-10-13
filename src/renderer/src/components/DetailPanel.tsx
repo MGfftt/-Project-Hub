@@ -9,7 +9,7 @@ import {
   formatNoteLength,
   formatRelativeTime
 } from '@renderer/lib/format'
-import { eventColor, statusColor, tagStyle } from '@renderer/lib/colors'
+import { eventColor, nodeColorLabel, nodeColorValue, NODE_COLORS, statusColor, tagStyle } from '@renderer/lib/colors'
 import { descendantIds, kindLabel, statusLabel } from '@renderer/lib/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
@@ -109,6 +109,10 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
   const [tags, setTags] = useState<string[]>(node.tags)
   const [tagDraft, setTagDraft] = useState('')
   const [note, setNote] = useState('')
+  /* §9.8 — the colour is a display property like the icon, so it lives here and
+   * is seeded from the tree row. `bump()` reloads the tree, which is what makes
+   * every other view (row, map card) pick the new colour up. */
+  const [color, setColor] = useState<string | null>(nodeColorValue(node.color))
 
   const [events, setEvents] = useState<HubEvent[]>([])
   const [eventsError, setEventsError] = useState<string | null>(null)
@@ -273,6 +277,27 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .catch(() => {
         setNodeStatus(previous)
         setStatus('更新状态失败', 'error')
+      })
+  }
+
+  /* --- §9.8 颜色 ---------------------------------------------------- */
+
+  const changeColor = (next: string | null): void => {
+    if (next === color) return
+    const hub = window.hub
+    if (!hub) return
+    const previous = color
+    setColor(next)
+    void hub.nodes
+      .update(id, { color: next })
+      .then(() => {
+        useTree.getState().bump()
+        const label = nodeColorLabel(next)
+        setStatus(label === null ? '已恢复默认颜色' : `颜色已改为${label}`, 'info')
+      })
+      .catch(() => {
+        setColor(previous)
+        setStatus('更新颜色失败', 'error')
       })
   }
 
@@ -522,6 +547,41 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                     onClick={() => useUi.getState().openDialog('icon', id)}
                   >
                     更改图标
+                  </button>
+                </span>
+              </Field>
+            </Group>
+
+            <Group title="颜色">
+              <Field label="颜色">
+                <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label="节点颜色">
+                  {NODE_COLORS.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      data-color={entry.id}
+                      aria-pressed={color === entry.value}
+                      aria-label={`颜色 ${entry.label}`}
+                      title={entry.label}
+                      className="focus-ring h-5 w-5 shrink-0 rounded-full border-2"
+                      style={{
+                        background: entry.value,
+                        borderColor: color === entry.value ? 'var(--text)' : 'transparent'
+                      }}
+                      onClick={() => changeColor(entry.value)}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    data-color="none"
+                    aria-pressed={color === null}
+                    className={`btn h-5 shrink-0 px-1.5 py-0 text-[11px] focus-ring ${
+                      color === null ? 'btn-primary' : ''
+                    }`}
+                    title="不使用自定义颜色"
+                    onClick={() => changeColor(null)}
+                  >
+                    默认
                   </button>
                 </span>
               </Field>

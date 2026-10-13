@@ -349,4 +349,26 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 
 **Lesson.** `nativeImage.createFromDataURL` failing silently is the whole bug: an icon that is never set looks exactly like an icon that is set to nothing, and no log line distinguishes them. When a library accepts several input flavours, test the one you actually ship.
 
+## D-025 · Cards drag between nodes on the map, every node carries a colour, and the forest loads itself on mount
+
+**Context.** Two requests from a round of use: nodes should be draggable onto each other (the map could only display), and every node should be able to take a colour. Proving them turned up a third, unrelated defect in the renderer's startup.
+
+**1. Dragging on the map.** The tree already had react-arborist's drag-and-drop; the map had none. The map now uses plain pointer events with `setPointerCapture`, a `DRAG_START_PX` threshold so that a click still selects, `document.elementFromPoint` to decide which card is under the cursor (`data-map-card`), and the very same `window.hub.nodes.move` the tree calls. Refusals: the dragged node itself, its own descendants (no cycles), and notes. Letting go over empty space is a deliberate no-op rather than a move to the top level — an accidental release over the background must not silently re-parent a project to the root.
+
+**Why pointer events and not HTML5 DnD or react-dnd.** react-arborist owns the tree's backend, but the map is an absolutely-positioned layout where the drop target is literally "whichever card is under the cursor", which `elementFromPoint` answers in one line. A second react-dnd backend over the same DOM would have been more machinery for less control, and the HTML5 backend cannot render a live ghost label following the pointer.
+
+**2. Colour.** `nodes.color` already existed in the schema and in `NodePatch`; nothing could set it. `src/renderer/src/lib/colors.ts` gained `NODE_COLORS` — ten named swatches plus a 默认 that clears — rendered once in the 属性 panel and again as the last row of the right-click menu (the menu stays open after a pick so colours can be compared side by side). The stored string never reaches a style unchecked: `nodeColorValue` validates it against the palette first, because the column is free TEXT that an older build or a hand-edited database could hold anything in, and interpolating it into `borderLeft`/`background` would be a CSS-injection path. An unknown value degrades to "no colour", i.e. the kind accent.
+
+**Why a fixed palette rather than a colour picker.** A free picker yields values no legend, tooltip or status line can name, and the whole point of the colour is to make a family of related projects recognisable at a glance.
+
+**3. The empty tree after a reload.** `AppShell` subscribed to `tree:updated` but never read the tree on mount, and the main process only emits that event as a side effect of something else (a scan, a git sync, a scheduled task). A renderer reload with nothing in flight therefore left the tree and the map empty until the next rescan — reachable through the default menu's 重新加载, which this app does not remove. Fixed with a one-shot `useEffect` calling `useTree.getState().load()`.
+
+**Evidence.** 14 checks driven over CDP against the real UI, on an isolated `--user-data-dir`: a ghost label appears during the drag; the drag grabs the intended card; dropping `beta` on a group gives `parent_id: 5`; dropping a node onto its own child is refused (`parent_id: null`); the 属性 panel offers 11 colour buttons; a click persists `#3b82f6` and it is visible on both the tree row and the map card; 默认 clears it to `null`; the context menu offers the same 11 and a green pick persists as `#22c55e`; no uncaught renderer errors. `npm run typecheck`, `npm test` (176 tests) and `npm run build` all exit 0.
+
+*Note for anyone re-running this:* in this session Electron only starts with `--no-sandbox --disable-gpu`; without them `electron.exe` exits before `app.requestSingleInstanceLock()` and no debuggable page ever appears. `--user-data-dir` is honoured, which is what makes the isolated probe safe.
+
+**Cost.** Roughly seventy lines of pointer bookkeeping on the map, which now depends on `data-map-card` staying stable, plus one more free-text column the renderer has to degrade gracefully. The menu grew to eleven actions and a swatch row, so it is now tall enough to be clamped (`max-h`/`overflow-auto`) on a short window.
+
+**Lesson.** An event-driven cache needs a bootstrapping read. `tree:updated` was emitted correctly at every site and the window was still blank, because nothing ever asked for the first state — the subscription answered "when it changes", never "what it is".
+
 

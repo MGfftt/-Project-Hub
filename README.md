@@ -203,6 +203,10 @@ project-hub/
 
 **备注**：全景图右上角的「添加备注」会给当前选中的节点挂一条备注（概览页里也有这个按钮）。备注是一条不指向磁盘的虚拟节点，正文保存在本地数据库里，在概览页的「备注内容」框里直接写，改完自动保存。备注可以挂在任何项目、分组或目录下面，用来记项目用途、待办、为什么先放下之类的事情。
 
+**在全景图里直接拖动卡片**：按住任意一张卡片拖到另一张卡片上松手，被拖的节点就挂到目标节点下面；拖到空白处松手不作任何改动。拖到自己的子孙、或拖到一个备注上都会被拒绝，不会出现循环。拖动时目标卡片会高亮，指针旁边跟着一张「<名字> 松开即可移入」的提示条。全景图和左树共用同一套移动逻辑：只改数据库里的位置，磁盘上不动，下一次扫描也不会把它挪回去。
+
+**给节点上色**：每个节点（分组、项目、目录、备注都算）都能单独设一个颜色。在右侧「属性」面板的「颜色」一行点色块即可，也可以右键树里的节点，用菜单最下面那一排同样的色块；点「默认」清除。颜色会成为节点图标背后的底色，图标本身也换成这个颜色，全景图上的卡片跟着一起变——用来一眼分辨一组相关的项目。
+
 > 如果升级之前把一个项目拖进过分组，升级后可能会看到同一个项目出现两次（旧版本会把它的所属根目录清空，扫描时就当作新文件夹又建了一条）。现在删除是持久的，删掉多余的那一条即可，剩下的那条保持在原来的分组里。
 
 全部数据与设置都在 `%APPDATA%\project-hub\`。
@@ -393,6 +397,10 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 **Dragging a project into a group.** A group is a virtual node with no folder on disk. Pick up a project or a folder and drop it **onto the group row or card itself** — an empty group accepts the drop too, with no need to create a sub-group first. A group changes where the node sits in the tree; it never moves anything on disk, and the next scan does not put the node back where the disk says it belongs.
 
 **Notes.** 添加备注 (top right of the map, and also a button on every overview page) attaches a note to the selected node. A note is a virtual node that points at nothing on disk; its body is stored in the local database and edited in the 备注内容 box on the overview page, which auto-saves as you type. Notes hang off projects, groups or folders and are the place for what a project is for, what comes next, or why it was set aside.
+
+**Dragging a card on the map.** Pick up any card, drop it onto another card, and the dragged node becomes a child of that one; let go over empty space and nothing changes. Dropping onto the node's own descendants, or onto a note, is refused, so no cycle can form. The card under the pointer highlights while you drag, and a small label follows the cursor reading `<name> 松开即可移入`. The map and the tree share one move path: it rewrites the position in the database only, never touches the disk, and the next scan does not put the node back where the disk says it belongs.
+
+**Colouring a node.** Every node — group, project, folder or note — can carry its own colour. Click a swatch in the 颜色 row of the 属性 panel, or right-click a node in the tree and use the same row at the bottom of the menu; 默认 clears it. The colour becomes the tint behind the node's icon, the icon itself takes the colour, and the map card follows — which makes a family of related projects easy to pick out at a glance.
 
 > If you dragged a project into a group *before* this version, you may see that project twice after upgrading: the old code cleared the node's owning root, so the scanner saw the same folder as new and inserted a second row. Deleting is permanent now — remove the extra row and the remaining one stays in its group.
 

@@ -62,6 +62,15 @@ export function AppShell(): JSX.Element {
     void useUi.getState().hydrate()
   }, [])
 
+  /* --- the forest ---------------------------------------------------------- */
+  /* The first read of the tree has to come from here. The main process only
+   * broadcasts `tree:updated` after a scan or a mutation, so a renderer that
+   * starts without one (a reload, or a start whose startup scan has already
+   * finished) would otherwise sit on an empty tree until the next rescan. */
+  useEffect(() => {
+    void useTree.getState().load()
+  }, [])
+
   /* --- the timeline's scope follows the selection -------------------------- */
   /* 改动时间线 always shows the selection's whole subtree: click one project and
    * you see that project alone, click a group (or any folder) and you see every

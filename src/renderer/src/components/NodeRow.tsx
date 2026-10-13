@@ -3,7 +3,7 @@ import type { NodeApi } from 'react-arborist'
 import { ChevronRight, Pencil } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
 import { NodeIcon } from '@renderer/components/NodeIcon'
-import { tagStyle } from '@renderer/lib/colors'
+import { nodeColorLabel, nodeColorValue, tagStyle, tint } from '@renderer/lib/colors'
 import { formatRelativeTime } from '@renderer/lib/format'
 import { useTree } from '@renderer/stores/tree'
 
@@ -113,6 +113,11 @@ export const NodeRow = memo(function NodeRow({
 
   const leaf = node.isLeaf
   const isVirtualGroup = data.kind === 'group' && !data.path
+  /* §9.8 — the node's own colour, validated against the palette. A coloured
+   * node tints its icon chip, which is the same treatment the map card uses,
+   * so one glance reads the same in both views. */
+  const accent = nodeColorValue(data.color)
+  const accentLabel = nodeColorLabel(data.color)
 
   const title = useMemo(() => {
     const parts = [data.display_name || data.name]
@@ -211,7 +216,16 @@ export const NodeRow = memo(function NodeRow({
 
       <Expander open={node.isOpen} leaf={leaf} onToggle={() => node.toggle()} />
 
-      <span className={isVirtualGroup ? 'text-[var(--accent)]' : 'text-[var(--text-dim)]'}>
+      <span
+        className={
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded ' +
+          (isVirtualGroup ? 'text-[var(--accent)]' : 'text-[var(--text-dim)]')
+        }
+        style={
+          accent === null ? undefined : { background: tint(accent, 0.18), color: accent }
+        }
+        title={accentLabel === null ? undefined : `颜色：${accentLabel}`}
+      >
         <NodeIcon node={data} size={16} withStatus />
       </span>
 

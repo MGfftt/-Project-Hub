@@ -13,6 +13,7 @@ import {
   Trash2
 } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
+import { NODE_COLORS, nodeColorValue } from '@renderer/lib/colors'
 
 /* ---------------------------------------------------------------------------
  * ContextMenu — the frozen §8.2 order and availability rules.
@@ -57,6 +58,8 @@ export interface ContextMenuProps {
   onAnnotate?: (node: TreeNode) => void
   onRename?: (node: TreeNode) => void
   onChangeIcon?: (node: TreeNode) => void
+  /** §9.8 — shown as a swatch row so a colour is one right-click away. */
+  onChangeColor?: (node: TreeNode, color: string | null) => void
   onNewGroup?: (node: TreeNode) => void
   onRemove?: (node: TreeNode) => void
 }
@@ -76,6 +79,7 @@ export function ContextMenu({
   onAnnotate,
   onRename,
   onChangeIcon,
+  onChangeColor,
   onNewGroup,
   onRemove
 }: ContextMenuProps): JSX.Element {
@@ -85,6 +89,10 @@ export function ContextMenu({
   const isVirtualGroup = node.kind === 'group' && !node.path
   const missing = node.path_missing === 1
   const noDiskPath = !node.path || missing
+  /* The `node` prop is a snapshot, so a freshly picked colour is tracked here
+   * to keep the swatch ring on the new choice while the menu stays open. */
+  const [pickedColor, setPickedColor] = useState<string | null | undefined>(undefined)
+  const currentColor = pickedColor === undefined ? nodeColorValue(node.color) : pickedColor
   /* §8.2 — a disabled 打开/在文件管理器中显示 explains itself on hover. */
   const noDiskHint = missing ? '路径不存在' : !node.path ? '分组没有对应的磁盘目录' : undefined
 
@@ -230,7 +238,7 @@ export function ContextMenu({
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
-      className="hub-pop-in fixed z-50 min-w-[224px] rounded-lg border p-1 shadow-xl"
+      className="hub-pop-in fixed z-50 max-h-[calc(100vh-8px)] min-w-[224px] overflow-auto rounded-lg border p-1 shadow-xl"
       style={{
         left: pos.left,
         top: pos.top,
@@ -278,6 +286,50 @@ export function ContextMenu({
           </button>
         </div>
       ))}
+
+      {/* §9.8 — picking a colour keeps the menu open so several can be compared. */}
+      <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
+      <div className="px-2 py-1">
+        <div className="mb-1 text-[var(--font-tag)] text-[var(--text-dim)]">颜色</div>
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="节点颜色">
+          {NODE_COLORS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="menuitemradio"
+              data-color={entry.id}
+              aria-checked={currentColor === entry.value}
+              aria-label={`颜色 ${entry.label}`}
+              title={entry.label}
+              className="focus-ring h-4 w-4 shrink-0 rounded-full border-2"
+              style={{
+                background: entry.value,
+                borderColor: currentColor === entry.value ? 'var(--text)' : 'transparent'
+              }}
+              onClick={() => {
+                setPickedColor(entry.value)
+                onChangeColor?.(node, entry.value)
+              }}
+            />
+          ))}
+          <button
+            type="button"
+            role="menuitemradio"
+            data-color="none"
+            aria-checked={currentColor === null}
+            title="不使用自定义颜色"
+            className={`btn h-4 shrink-0 px-1.5 py-0 text-[10px] focus-ring ${
+              currentColor === null ? 'btn-primary' : ''
+            }`}
+            onClick={() => {
+              setPickedColor(null)
+              onChangeColor?.(node, null)
+            }}
+          >
+            默认
+          </button>
+        </div>
+      </div>
     </div>,
     document.body
   )

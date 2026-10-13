@@ -595,6 +595,11 @@ export function TreePanel(): JSX.Element {
             window.dispatchEvent(new CustomEvent('hub:rename', { detail: node.id }))
           }}
           onChangeIcon={(node) => useUi.getState().openDialog('icon', node.id)}
+          onChangeColor={(node, color) => {
+            void window.hub?.nodes.update(node.id, { color }).then(() => {
+              useTree.getState().bump()
+            })
+          }}
           onNewGroup={(node) => void createChildGroup(node)}
           onRemove={(node) => {
             window.dispatchEvent(new CustomEvent('hub:confirm-remove', { detail: node.id }))

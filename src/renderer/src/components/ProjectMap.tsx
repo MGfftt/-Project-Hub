@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { ChevronDown, ChevronRight, Maximize2, Minus, Plus, StickyNote } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 import NodeIcon from '@renderer/components/NodeIcon'
-import { kindLabel } from '@renderer/lib/tree'
-import { statusColor } from '@renderer/lib/colors'
+import { descendantIds, kindLabel } from '@renderer/lib/tree'
+import { nodeColorValue, statusColor } from '@renderer/lib/colors'
 
 /* ---------------------------------------------------------------------------
  * ProjectMap — the whole library drawn as a tree, not described as text.
@@ -34,6 +35,20 @@ const SLOT = CARD_H + GAP_Y
 const MAX_CARDS = 4000
 const MIN_SCALE = 0.35
 const MAX_SCALE = 1.6
+/** §9.9 — a card only becomes a drag source after this much pointer travel, so
+ *  a plain click still selects instead of starting (and instantly ending) a
+ *  one-pixel drag. */
+const DRAG_START_PX = 4
+
+/** The floating copy of the card that follows the pointer (§9.9). */
+interface MapGhost {
+  id: number
+  /** Client coordinates of the pointer. */
+  x: number
+  y: number
+  /** Card currently under the pointer, or null when the drop is illegal. */
+  over: number | null
+}
 
 /** Accent per node family — the marker's ecosystem when we know it. */
 const ACCENT: Record<string, string> = {
@@ -133,6 +148,14 @@ export function ProjectMap(): JSX.Element {
   const [scale, setScale] = useState(1)
   const autoFitted = useRef(false)
 
+  /* §9.9 drag state. The live drop target is kept in a ref as well as in state:
+   * `pointermove` updates arrive faster than React commits, and `pointerup` must
+   * read the target that the *last* move computed, not the last rendered one. */
+  const [ghost, setGhost] = useState<MapGhost | null>(null)
+  const pendingDrag = useRef<{ id: number; x: number; y: number } | null>(null)
+  const liveDrag = useRef<{ id: number; over: number | null } | null>(null)
+  const justDragged = useRef(false)
+
   const isOpen = useCallback((id: number) => open[id] === true || open[id] === undefined, [open])
 
   const { placed, width, height } = useMemo(
@@ -170,6 +193,92 @@ export function ProjectMap(): JSX.Element {
   )
 
   const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed])
+
+  /* --- §9.9 dragging a card onto another card ------------------------ */
+
+  /**
+   * The card under the pointer, or `null` when dropping there is illegal.
+   *
+   * Three rules, all enforced here rather than only visually: a node cannot be
+   * dropped onto itself, it cannot be dropped into its own subtree (that would
+   * detach the subtree from the forest and orphan it), and a note — an
+   * annotation, not a container — never accepts children.
+   */
+  const dropTargetAt = useCallback((x: number, y: number, fromId: number): number | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    const card = el?.closest('[data-map-card]') as HTMLElement | null
+    if (!card) return null
+    const id = Number(card.dataset.mapCard)
+    if (!Number.isInteger(id) || id === fromId) return null
+    const current = useTree.getState().byId
+    const from = current.get(fromId)
+    if (!from) return null
+    if (descendantIds(from, current).includes(id)) return null
+    if (current.get(id)?.kind === 'note') return null
+    return id
+  }, [])
+
+  const onCardPointerDown = (node: TreeNode, e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0) return
+    // The expander and the +N pill are controls; a drag must not start on them.
+    if ((e.target as HTMLElement).closest('[data-map-nodrag]')) return
+    pendingDrag.current = { id: node.id, x: e.clientX, y: e.clientY }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const onCardPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const start = pendingDrag.current
+    if (!start) return
+    if (liveDrag.current === null) {
+      const travel = Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y)
+      if (travel <= DRAG_START_PX) return
+      liveDrag.current = { id: start.id, over: null }
+    }
+    const over = dropTargetAt(e.clientX, e.clientY, start.id)
+    liveDrag.current.over = over
+    setGhost({ id: start.id, x: e.clientX, y: e.clientY, over })
+  }
+
+  const onCardPointerUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const start = pendingDrag.current
+    const moved = liveDrag.current
+    pendingDrag.current = null
+    liveDrag.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    if (!start || moved === null) return
+    setGhost(null)
+    /* The click event fires after pointerup, so the flag has to survive until
+     * the next task — clearing it synchronously would let a real drag that
+     * ended where it began also select the card. */
+    justDragged.current = true
+    window.setTimeout(() => {
+      justDragged.current = false
+    }, 0)
+    const target = moved.over
+    if (target === null) return
+    void window.hub?.nodes
+      .move(start.id, target, 0)
+      .then(() => {
+        setStatus('已移动节点', 'info')
+        return useTree.getState().load()
+      })
+      .catch((err: unknown) => setStatus(`移动失败：${String(err)}`, 'error'))
+  }
+
+  /* Escape abandons a drag that is already in flight. Registered once — the
+   * handler reads the ref, so it never needs to re-bind as the ghost moves. */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if (e.key !== 'Escape' || liveDrag.current === null) return
+      pendingDrag.current = null
+      liveDrag.current = null
+      setGhost(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   if (nodes.length === 0) {
     return (
@@ -228,7 +337,7 @@ export function ProjectMap(): JSX.Element {
           <StickyNote size={13} aria-hidden />
           添加备注
         </button>
-        <span className="hidden sm:inline">单击卡片选中并查看，点箭头展开或收起</span>
+        <span className="hidden sm:inline">单击卡片查看，点箭头展开，拖动卡片可换父节点</span>
         <span className="flex items-center gap-1">
           <button type="button" className="btn btn-ghost" title="缩小" onClick={() => zoom(-0.1)}>
             <Minus size={13} aria-hidden />
@@ -243,7 +352,13 @@ export function ProjectMap(): JSX.Element {
         </span>
       </div>
 
-      <div ref={boxRef} className="relative min-h-0 flex-1 overflow-auto">
+      <div
+        ref={boxRef}
+        className={
+          /* Selecting text mid-drag would highlight half the map. */
+          'relative min-h-0 flex-1 overflow-auto' + (ghost === null ? '' : ' select-none')
+        }
+      >
         <div style={{ width: width * scale, height: height * scale, position: 'relative' }}>
           <div
             style={{
@@ -281,27 +396,45 @@ export function ProjectMap(): JSX.Element {
 
             {placed.map(({ node, x, y, children, expanded }) => {
               const active = selectedId === node.id
-              const accent = accentFor(node)
+              /* §9.8 — a colour the user set wins over the kind/ecosystem hue. */
+              const accent = nodeColorValue(node.color) ?? accentFor(node)
               const label = node.display_name || node.name
+              const dropping = ghost !== null && ghost.over === node.id
+              const lifted = ghost !== null && ghost.id === node.id
               return (
                 <div
                   key={node.id}
                   data-map-card={node.id}
-                  className="absolute flex items-center gap-1.5 rounded-md border pr-1.5 shadow-sm transition-colors"
+                  className="absolute flex cursor-grab items-center gap-1.5 rounded-md border pr-1.5 shadow-sm transition-colors"
+                  onPointerDown={(e) => onCardPointerDown(node, e)}
+                  onPointerMove={onCardPointerMove}
+                  onPointerUp={onCardPointerUp}
+                  onPointerCancel={onCardPointerUp}
                   style={{
                     left: x + PAD,
                     top: y + PAD,
                     width: CARD_W,
                     height: CARD_H,
-                    borderColor: active ? accent : 'var(--border)',
+                    borderColor: active || dropping ? accent : 'var(--border)',
                     borderLeft: `3px solid ${accent}`,
-                    background: active ? 'var(--selected)' : 'var(--card, var(--bg))',
-                    boxShadow: active ? `inset 0 0 0 1px ${accent}` : undefined
+                    background: dropping
+                      ? `${accent}1f`
+                      : active
+                        ? 'var(--selected)'
+                        : 'var(--card, var(--bg))',
+                    boxShadow: dropping
+                      ? `inset 0 0 0 2px ${accent}`
+                      : active
+                        ? `inset 0 0 0 1px ${accent}`
+                        : undefined,
+                    opacity: lifted ? 0.4 : 1
                   }}
                 >
                   {children.length > 0 ? (
                     <button
                       type="button"
+                      data-map-nodrag
+                      onPointerDown={(e) => e.stopPropagation()}
                       className="focus-ring ml-0.5 -mr-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-[var(--hover)]"
                       aria-expanded={expanded}
                       title={expanded ? '收起' : `展开（${children.length} 个子节点）`}
@@ -330,7 +463,11 @@ export function ProjectMap(): JSX.Element {
                         ? `备注：${String((node.meta?.text as string) ?? '') || '（空白）'}`
                         : `${label}（虚拟分组）`)
                     }
-                    onClick={() => onCardClick(node)}
+                    onClick={() => {
+                      /* A drag that ended on its own card must not also select. */
+                      if (justDragged.current) return
+                      onCardClick(node)
+                    }}
                   >
                     <span
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
@@ -362,6 +499,8 @@ export function ProjectMap(): JSX.Element {
                   {!expanded && children.length > 0 ? (
                     <button
                       type="button"
+                      data-map-nodrag
+                      onPointerDown={(e) => e.stopPropagation()}
                       className="focus-ring -ml-1 shrink-0 rounded-full border px-1 text-[10px] leading-4 text-[var(--text-dim)]"
                       style={{ borderColor: 'var(--border)' }}
                       title={`已收起 ${children.length} 个子节点`}
@@ -378,6 +517,45 @@ export function ProjectMap(): JSX.Element {
             })}
           </div>
         </div>
+
+        {/* §9.9 — the card being dragged, as a fixed-size copy that follows the
+            pointer. It sits outside the scaled wrapper so it keeps its own size
+            at any zoom, and it is `pointer-events-none` so the hit test under it
+            still reaches the card the user is hovering. */}
+        {ghost === null
+          ? null
+          : (() => {
+              const dragged = placed.find((p) => p.node.id === ghost.id)?.node ?? null
+              const box = boxRef.current
+              const rect = box?.getBoundingClientRect()
+              const left = ghost.x - (rect?.left ?? 0) + (box?.scrollLeft ?? 0)
+              const top = ghost.y - (rect?.top ?? 0) + (box?.scrollTop ?? 0)
+              const draggedAccent = dragged
+                ? nodeColorValue(dragged.color) ?? accentFor(dragged)
+                : 'var(--border)'
+              return (
+                <div
+                  data-map-ghost={ghost.id}
+                  className="pointer-events-none absolute z-20 flex max-w-[240px] items-center gap-1.5 rounded-md border px-2 py-1 shadow-lg"
+                  style={{
+                    left: left + 14,
+                    top: top + 10,
+                    borderColor: draggedAccent,
+                    borderLeft: `3px solid ${draggedAccent}`,
+                    background: 'var(--panel)',
+                    transform: `scale(${Math.max(0.75, Math.min(1, scale))})`,
+                    transformOrigin: 'top left'
+                  }}
+                >
+                  <span className="min-w-0 truncate text-[12px]">
+                    {dragged ? dragged.display_name || dragged.name : '节点'}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-[var(--text-dim)]">
+                    {ghost.over === null ? '拖到另一个节点上' : '松开即可移入'}
+                  </span>
+                </div>
+              )
+            })()}
       </div>
     </div>
   )
