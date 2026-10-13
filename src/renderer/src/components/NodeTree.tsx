@@ -344,7 +344,16 @@ export function NodeTree({
           onMove={handleMove}
           onSelect={(selection) => {
             const first = selection[0]
-            select(first == null ? null : Number(first.id))
+            if (first == null) {
+              select(null)
+              return
+            }
+            /* A click must always show something. On the timeline tab the
+             * events on screen belong to whatever 查看改动 filtered, which is
+             * not necessarily what was just clicked, so land on the overview
+             * instead of leaving a stale list under a fresh selection. */
+            select(Number(first.id))
+            useUi.getState().setMainView('overview')
           }}
           onActivate={(node) => handleActivate(node, 'click')}
           onToggle={handleToggle}
