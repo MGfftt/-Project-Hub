@@ -175,6 +175,14 @@ project-hub/
 
 所有与项目书不同但有意为之的决定，都记录在 [`DECISIONS.md`](DECISIONS.md)，包括驱动回退策略、任务名与间隔的调整、内置图标集与 §8.4 冻结清单的对应关系。
 
+### 9. 疑难排查：双击没有任何反应
+
+如果双击 `Project Hub.exe` 完全没反应（没有窗口、没有报错、进程也不驻留），先确认**程序不是在受限目录里就地运行**：把整个 `release\win-unpacked` 文件夹复制到一个普通位置（例如 `C:\Users\<你>\Project Hub`）再从那里启动。本项目的构建产物原本位于一个由工具托管的受限工作区，其 ACL 含有 `CodexSandboxUsers`、`Everyone` 的 `DENY` 以及低完整性标签；Chromium 的沙箱在那里无法启动，进程会在执行任何 JavaScript **之前**就退出（Windows 事件日志表现为 `electron.exe` 的 `0xc0000005`，直接启动的退出码是 `-2147483645` / `0x80000003`）。同一份文件换到别的目录就一切正常——包括换到另一个非 ASCII 路径之后仍然正常，因此中文路径不是原因。
+
+**优先使用安装版**：`release\Project Hub-2.0.0-win-x64.exe` 会安装到 `%LOCALAPPDATA%\Programs\Project Hub`，并创建桌面与开始菜单快捷方式，不需要任何命令行参数，快捷方式也不带参数，因此渲染进程的沙箱是完整保留的。若静默安装（`/S`）失败或卡住，请先执行 `$env:TEMP = $env:TMP = "$env:USERPROFILE\PHTemp"` 再运行安装包：安装器在受限目录里取临时目录时会崩溃。
+
+程序的全部数据始终写在 `%APPDATA%\project-hub\`，与安装位置无关。
+
 ---
 
 ## English Documentation
@@ -333,6 +341,14 @@ These cannot be automated headlessly and need a human:
 ### 8. Known deviations
 
 Every deliberate difference from the project book is recorded in [`DECISIONS.md`](DECISIONS.md): the driver fallback strategy, adjusted task names and intervals, and how the built-in icon set maps onto the frozen §8.4 list.
+
+### 9. Troubleshooting: double-click does nothing
+
+If double-clicking `Project Hub.exe` produces no window, no error and no lingering process, first check that **the program is not being run in place inside a locked-down directory**: copy the whole `release\win-unpacked` folder to an ordinary location (for example `C:\Users\<you>\Project Hub`) and start it from there. The build output originally sat in a tool-managed workspace whose ACLs include `CodexSandboxUsers`, a `DENY` for `Everyone` and a low-integrity label; Chromium's sandbox cannot start there, and the process exits **before it executes any JavaScript** (Windows Event Log shows `electron.exe` faulting with `0xc0000005`; a direct spawn returns `-2147483645` / `0x80000003`). The same bytes work from any other directory — including another non-ASCII path, which is how the Chinese path was ruled out as the cause.
+
+**Prefer the installer**: `release\Project Hub-2.0.0-win-x64.exe` installs to `%LOCALAPPDATA%\Programs\Project Hub` and creates Desktop and Start Menu shortcuts with no command-line arguments at all, so the renderer sandbox stays intact. If a silent install (`/S`) fails or hangs, run `$env:TEMP = $env:TMP = "$env:USERPROFILE\PHTemp"` before launching the installer: it crashes when it picks a temp directory inside a locked-down folder.
+
+All application data always lives in `%APPDATA%\project-hub\`, regardless of where the program is installed.
 
 ---
 

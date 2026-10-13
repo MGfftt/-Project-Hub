@@ -238,12 +238,30 @@ LOAD_FAIL Could not locate the bindings file. Tried: …
 
 **Why.** The measurement is unambiguous and reproducible: the packaged `Project Hub.exe`, `--no-sandbox`, window open, sampled after 30 seconds idle, reports four processes — main ~152 MB, renderer ~107 MB, GPU and utility ~130 MB, total 393.7 MB. Idle CPU in the same run was 0.018% of 32 cores, so the miss is specifically memory, and it comes from Chromium rather than from application code: the main process holds the SQLite connection, the file watchers and the scheduler, none of which are large.
 
-Two caveats make the number pessimistic, and neither is strong enough to claim the budget is met: this host has no usable GPU (so software rendering and its buffers are counted here) and its Chromium sandbox cannot initialise, so the app is launched with `--no-sandbox`, which changes how work is distributed across processes. A normal desktop would very likely be lower — but nothing measured supports "under 220 MB".
+Two caveats make the number pessimistic, and neither is strong enough to claim the budget is met: this host has no usable GPU (so software rendering and its buffers are counted here) and the sample was taken with `--no-sandbox`, which changes how work is distributed across processes. That flag is now known to have been a workaround for *where the build sat*, not a property of the machine (see D-020), so the figure is a pessimistic upper bound for a second reason as well. A normal desktop would very likely be lower — but nothing measured supports "under 220 MB".
 
 **The real fix, not taken here.** Reclaim the renderer while the app is hidden: destroy the window's `webContents` when it is closed to the tray and rebuild it on demand from the tray menu. The app is tray-resident by design (R6), and the window is hidden most of the time, so this is the natural shape — but it changes the lifecycle the renderer components rely on (stores rehydrate from scratch on every reveal, an in-flight inline rename or note draft would be lost), which makes it a product decision rather than an optimisation. It is left for a follow-up with the trade-off stated up front.
 
 **Cost.** R5 ("low resource use") is only partly satisfied: CPU, disk and database all have wide margins (0.018% idle CPU; 19.37 MB against a 50 MB budget; 76 ms to scan 10,200 files), but resident memory does not. The README's performance table shows the failing row rather than hiding it, and the manual-acceptance list no longer asks a human to "check memory" as though the answer were unknown.
 
 **Lesson.** A non-functional target that cannot be measured automatically is easy to leave as an aspiration. Running the packaged binary and reading the process table took ten minutes and turned an assumption into a number — which then had to be reported as a failure. That is the point of measuring it.
+
+---
+
+## D-020 · The shipped app needs no flags; the flags were an artifact of where it was built
+
+**Decision.** Ship the unpacked build and the installer exactly as they are — with no `--no-sandbox` anywhere in the product, the shortcuts, or the launcher — and record that a Chromium application placed directly inside this session's workspace folder dies before JavaScript, while the same bytes run normally from any ordinary directory.
+
+**Why.** A user ran `release\win-unpacked\Project Hub.exe` and reported nothing happening at all: no window, no error, no process left behind, and no `%APPDATA%\project-hub` directory. The Event Log showed `electron.exe` version `33.4.11.0` faulting with `0xc0000005`, and a direct spawn returned `-2147483645` (0x80000003 `STATUS_BREAKPOINT`). A marker probe settled the scope: a throwaway main process that wrote a file on its first line, plus `app.commandLine.appendSwitch('no-sandbox')`, produced **no marker file at all** — the process is gone before any JavaScript executes, so no in-app fix can exist. `--no-sandbox` was the only one of ten tested flags that made it start (`--disable-gpu`, `--disable-gpu-sandbox`, `--disable-crash-reporter`, and redirected stdio all failed; the same failure came from Explorer, Task Scheduler, and `Win32_Process.Create`).
+
+**Root cause.** The build output lived under `C:\Users\41239\Desktop\文件整理`, a tool-managed tree whose ACLs are not ordinary user ACLs: `ffttmg\CodexSandboxUsers:(I)(OI)(CI)(RX)`, `Everyone:(I)(CI)(DENY)(DC)`, `Mandatory Label\Low Mandatory Level:(I)(OI)(CI)(NW)`, and a synthetic writer ACE for `S-1-4-325811806-472389683`. Copying the *same files* out of that tree made both the app and the installer work with no flags whatsoever — verified at `%LOCALAPPDATA%\Programs\Project Hub`, at `C:\Users\41239\PHTest`, and at the non-ASCII `%USERPROFILE%\文件整理测试\PH`. The last of those also rules out the non-ASCII path as a cause, which had been the leading hypothesis.
+
+Two upstream explanations were checked and are *not* the whole story here: this Windows 11 build (`10.0.26300`) has a known Chromium sandbox-launch bug (GitHub Desktop [desktop/desktop#22306](https://github.com/desktop/desktop/issues/22306), Electron [electron/electron#54614](https://github.com/electron/electron/issues/54614)), but the workaround those threads recommend — `--disable-gpu-sandbox` — did not help, and granting the AppContainer SID (`icacls <dir> /grant "*S-1-15-2-2:(OI)(CI)(RX)" /T /C /Q`, 115 files) changed nothing.
+
+**Installer note.** NSIS from inside the same tree either hung or exited `0xC0000005`; the identical installer copy, run with `TEMP` and `TMP` pointed at a clean folder, installed silently (exit 0) into `%LOCALAPPDATA%\Programs\Project Hub` and created Desktop and Start Menu shortcuts whose arguments are empty — the shipped app keeps its renderer sandbox.
+
+**Cost.** Nothing in the product changed, so nothing was given up: the earlier `--no-sandbox` measurements (D-019) simply became a pessimistic upper bound rather than the only way to run the app. The real cost was diagnostic time, spent on the assumption that a packaged binary that fails in one place fails everywhere.
+
+**Lesson.** "It runs on my machine" is a claim about a *location* as much as about a build. When a launch fails with no output, move the artifact to a neutral directory before writing a single line of product code — the reproducing difference may be the folder, not the program.
 
 
