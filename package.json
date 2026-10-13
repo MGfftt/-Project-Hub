@@ -1,0 +1,58 @@
+{
+  "name": "project-hub",
+  "version": "2.0.0",
+  "description": "Low-footprint tray-resident desktop app that aggregates scattered project folders into a freely re-composable tree, with annotations, naming, custom icons and a change-history timeline.",
+  "main": "./out/main/index.cjs",
+  "author": "Project Hub Contributors",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
+    "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "build": "npm run typecheck && electron-vite build",
+    "build:win": "npm run build && electron-builder --win --config electron-builder.yml",
+    "build:mac": "npm run build && electron-builder --mac --config electron-builder.yml",
+    "build:linux": "npm run build && electron-builder --linux --config electron-builder.yml",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "bench:scan": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/bench-scan.mts",
+    "gen:fixture": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/gen-big-fixture.mts",
+    "sync:schema": "node scripts/sync-schema.mjs",
+    "gate:v2": "npm run typecheck && npm run test:unit && npm run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "chokidar": "^4.0.3",
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-arborist": "^3.4.0",
+    "react-dom": "^18.3.1",
+    "simple-git": "^3.27.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.3.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

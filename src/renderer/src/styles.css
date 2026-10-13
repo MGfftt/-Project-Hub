@@ -1,0 +1,368 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+ * Design tokens (§9.1 / §9.5)
+ *
+ * Light is the default on `:root`; `.dark` (set on <html> by main.tsx) only
+ * overrides values, so every consumer can rely on the variable existing.
+ * Two aliases are kept on purpose:
+ *   `--app-*`  — consumed by `tailwind.config.js` (`bg-app-panel`, …)
+ *   `--bg`, `--panel`, `--border`, `--text`, `--text-dim`, `--accent` — the
+ *                canonical names used across the renderer's components.
+ * ======================================================================== */
+
+:root {
+  /* surfaces + text */
+  --bg: #ffffff;
+  --panel: #f9fafb;
+  --border: #e5e7eb; /* §9.1 separator, light */
+  --text: #111827; /* ≥ 4.5:1 on --bg */
+  --text-dim: #6b7280; /* ≥ 3:1 on --bg, 12px minimum */
+  --hover: rgba(0, 0, 0, 0.031); /* §9.2 hover 态 */
+  --selected: rgba(59, 130, 246, 0.1); /* §9.2 选中态 #3b82f61a */
+  --accent: #3b82f6;
+
+  /* tailwind aliases */
+  --app-bg: var(--bg);
+  --app-panel: var(--panel);
+  --app-border: var(--border);
+  --app-text: var(--text);
+  --app-muted: var(--text-dim);
+  --app-hover: var(--hover);
+  --app-accent: var(--accent);
+
+  /* metrics (§9.1) */
+  --row-h: 32px;
+  --row-h-compact: 26px;
+  --font-main: 14px;
+  --font-minor: 12px;
+  --font-tag: 11px;
+  --icon-size: 16px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --radius-pill: 999px;
+  --indent-step: 16px; /* §9.3 */
+
+  /* event sources (§9.4) */
+  --ev-git: #8b5cf6;
+  --ev-fs: #06b6d4;
+  --ev-manual: #f59e0b;
+
+  /* node status (§6.5) */
+  --st-active: #22c55e;
+  --st-paused: #f59e0b;
+  --st-done: #3b82f6;
+  --st-archived: #9ca3af;
+
+  /* tone colours for transient StatusBar text; ≥ 4.5:1 on --panel */
+  --tone-info: #1d4ed8;
+  --tone-warn: #b45309;
+  --tone-error: #b91c1c;
+
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #18181b;
+  --panel: #1f1f23;
+  --border: #27272a; /* §9.1 separator, dark */
+  --text: #f4f4f5;
+  --text-dim: #a1a1aa;
+  --hover: rgba(255, 255, 255, 0.039); /* §9.2 hover 态 */
+  --selected: rgba(59, 130, 246, 0.18);
+  --accent: #3b82f6;
+
+  --tone-info: #93c5fd;
+  --tone-warn: #fcd34d;
+  --tone-error: #fca5a5;
+
+  color-scheme: dark;
+}
+
+/* ===========================================================================
+ * Base
+ * ======================================================================== */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family:
+      Inter, system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    font-size: var(--font-main);
+    line-height: 1.45;
+    overflow: hidden; /* the app shell owns scrolling, never the window */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* §9.7 — a 2px visible focus ring on every keyboard-reachable control. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: rgba(59, 130, 246, 0.28);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 2px solid transparent;
+    border-radius: var(--radius-pill);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* ===========================================================================
+ * Reusable component classes
+ * ======================================================================== */
+
+@layer components {
+  .card {
+    @apply rounded-lg border bg-[var(--panel)];
+    border-color: var(--border);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+    border-color: var(--border);
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  .btn:hover:not(:disabled) {
+    background-color: var(--hover);
+  }
+
+  .btn-primary {
+    @apply border-transparent text-white;
+    background-color: var(--accent);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #2563eb;
+  }
+
+  .btn-danger {
+    @apply border-transparent text-white;
+    background-color: #dc2626;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: #b91c1c;
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent;
+    color: var(--text-dim);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--hover);
+    color: var(--text);
+  }
+
+  /* §9.2 tag pill — hashed hue comes from `lib/colors.ts` as an inline style. */
+  .tag {
+    @apply inline-flex max-w-[9rem] items-center truncate rounded-full px-1.5 text-[11px] leading-[16px];
+  }
+
+  .input {
+    @apply w-full rounded-md border px-2 py-1 text-xs;
+    border-color: var(--border);
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  .input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .input:focus {
+    border-color: var(--accent);
+  }
+
+  /* Explicit hook for controls that cannot rely on :focus-visible alone. */
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .row {
+    height: var(--row-h);
+  }
+
+  .row-compact {
+    height: var(--row-h-compact);
+  }
+
+  /* §9.2 selection: tinted background + a 2px accent bar on the left. */
+  .row-selected {
+    background-color: var(--selected);
+    box-shadow: inset 2px 0 0 0 var(--accent);
+  }
+
+  .row-hover:hover {
+    background-color: var(--hover);
+  }
+
+  .divider-y {
+    border-top: 1px solid var(--border);
+  }
+
+  .divider-x {
+    border-left: 1px solid var(--border);
+  }
+}
+
+/* ===========================================================================
+ * Dark-mode bridge for the hashed tag colours
+ *
+ * `lib/colors.ts` returns a light pastel background + dark ink pair (one inline
+ * style object works in both themes only if something darkens it), so dark mode
+ * scales that pair down instead of duplicating the palette per theme.
+ * ======================================================================== */
+
+.dark .tag {
+  filter: brightness(0.62) saturate(1.05);
+}
+
+/* ===========================================================================
+ * Skeleton shimmer (§9.6 — skeletons, never spinners)
+ * ======================================================================== */
+
+@keyframes hub-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.skeleton {
+  border-radius: 6px;
+  background-color: var(--border);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text) 12%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: hub-shimmer 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ===========================================================================
+ * Misc motion used by panels/dialogs
+ * ======================================================================== */
+
+@keyframes hub-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hub-pop-in {
+  animation: hub-fade-in 110ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-pop-in {
+    animation: none;
+  }
+}
+
+/* Dashed guide lines for the tree (§9.3). */
+.hub-guide {
+  border-left: 1px dashed var(--border);
+}
+
+/* ===========================================================================
+ * Column resize handles (§9.1)
+ *
+ * A 5px hit area with a 1px visual line that only appears on hover/focus — the
+ * separator itself stays 1px so the grid reads as three flat columns.
+ * ======================================================================== */
+
+.resize-handle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 5px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 120ms ease-out;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 2px;
+  width: 1px;
+  background-color: var(--border);
+}
+
+.resize-handle:hover::after,
+.resize-handle:focus-visible::after {
+  background-color: var(--accent);
+  width: 2px;
+}
+
+.resize-handle:active::after {
+  background-color: var(--accent);
+  width: 2px;
+}
+
+/* Status pills used by the settings dialog (kept separate from the hashed tags
+   so an HSL tag colour can never collide with a semantic one). */
+.tag-ok {
+  background-color: color-mix(in srgb, var(--st-active) 18%, transparent);
+  color: var(--text);
+}
+
+.tag-warn {
+  background-color: color-mix(in srgb, var(--st-paused) 22%, transparent);
+  color: var(--text);
+}
+

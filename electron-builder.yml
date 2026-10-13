@@ -1,0 +1,92 @@
+# electron-builder configuration (§15 packaging)
+#
+# `npm run build` (electron-vite) produces `out/main`, `out/preload` and
+# `out/renderer`; this file only decides how those three directories become an
+# installer. The app has exactly one native dependency (`better-sqlite3`), so the
+# asar has to be unpacked for it — see `asarUnpack` below.
+appId: com.projecthub.app
+productName: Project Hub
+copyright: Copyright © 2024 Project Hub Contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the build output and the metadata files are shipped. Shipping `src/`
+# would leak TypeScript sources and roughly triple the installer size.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/{.eslintrc,.editorconfig,.prettierrc}'
+  - '!**/{tsconfig,tsconfig.*}.json'
+  - '!**/*.ts'
+  - '!**/*.tsx'
+  - '!**/*.md'
+
+# better-sqlite3 ships a prebuilt `.node` binary that cannot be loaded from
+# inside an asar archive, so it is unpacked next to it.
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**
+  - '**/*.node'
+
+# The renderer bundle is self-contained; nothing else needs to be downloaded.
+electronDownload:
+  mirror: https://github.com/electron/electron/releases/download/v
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Project Hub
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.developer-tools
+  # The app reads project folders the user explicitly adds; it never writes to
+  # them. These strings are what macOS shows when it asks for access.
+  extendInfo:
+    NSDesktopFolderUsageDescription: Project Hub reads the project folders you add to it so it can show them in your tree. It never writes to them.
+    NSDocumentsFolderUsageDescription: Project Hub reads the project folders you add to it so it can show them in your tree. It never writes to them.
+    NSDownloadsFolderUsageDescription: Project Hub reads the project folders you add to it so it can show them in your tree. It never writes to them.
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+
+dmg:
+  title: ${productName} ${version}
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64]
+  category: Development
+  synopsis: Aggregate scattered project folders into one tree
+  description: >-
+    A low-footprint, tray-resident desktop app that aggregates scattered project
+    folders into a freely re-composable tree, with annotations, in-app naming,
+    custom icons and a change-history timeline. It never writes to the folders
+    it indexes.
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libsecret-1-0

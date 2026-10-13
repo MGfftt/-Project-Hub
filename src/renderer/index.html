@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Renderer lockdown (§4.3). The bundle is served from `file:`/`self`; images may
+      only come from the `hub-media://` protocol owned by the main process; React
+      needs no inline script, but `style-src` must allow inline styles because
+      Tailwind/@apply and a few dynamic `style={{…}}` values write into the DOM.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: hub-media:; font-src 'self' data:; connect-src 'self' ws: http://localhost:*"
+    />
+    <title>Project Hub</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+release/
+.npm-cache/
+.cache/
+.tmp/
+.bench/
+*.log
+.DS_Store
+coverage/
+tests/tmp/
+*.local
+.vite/
+*.tsbuildinfo
