@@ -13,3 +13,5 @@ tests/tmp/
 *.local
 .vite/
 *.tsbuildinfo
+
+.commit-*.txt
