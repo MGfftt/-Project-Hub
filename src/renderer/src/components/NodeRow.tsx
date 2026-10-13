@@ -48,6 +48,10 @@ const MAX_VISIBLE_TAGS = 3
 /** Live rename validation (§8.3): empty clears the alias, 64 chars is the cap. */
 export const DISPLAY_NAME_MAX = 64
 
+/** §9.3 — must match `indent` on `<Tree>` in NodeTree.tsx: the indent guides
+ *  are positioned from this number, not from the padding react-arborist adds. */
+const INDENT = 16
+
 function Expander({
   open,
   leaf,
@@ -127,6 +131,9 @@ export const NodeRow = memo(function NodeRow({
     }
   }, [data.tags])
 
+  /* §9.2 — a collapsed parent advertises how much sits inside it. */
+  const childCount = Array.isArray(data.children) ? data.children.length : 0
+
   function commit(): void {
     const value = draft.trim().slice(0, DISPLAY_NAME_MAX)
     setLocalEditing(false)
@@ -172,7 +179,7 @@ export const NodeRow = memo(function NodeRow({
         }
       }}
       className={[
-        'flex h-full w-full items-center gap-1.5 pr-2 text-[var(--font-main)]',
+        'relative flex h-full w-full items-center gap-1.5 pr-2 text-[var(--font-main)]',
         compact ? 'row-compact' : 'row',
         selected ? 'row-selected' : 'row-hover',
         data.status === 'archived' ? 'opacity-60 grayscale' : '',
@@ -181,6 +188,26 @@ export const NodeRow = memo(function NodeRow({
         .filter(Boolean)
         .join(' ')}
     >
+      {/* Indent guides. react-arborist pads the row by `indent * level`, so one
+          hairline per ancestor level (drawn at the centre of that level's
+          expander column) turns the flat list into a readable tree. */}
+      {node.level > 0
+        ? Array.from({ length: node.level }, (_, i) => (
+            <span
+              key={`guide-${i}`}
+              aria-hidden
+              className="pointer-events-none absolute"
+              style={{
+                left: INDENT * i + INDENT / 2,
+                top: 0,
+                bottom: 0,
+                width: 1,
+                background: 'var(--border)'
+              }}
+            />
+          ))
+        : null}
+
       <Expander open={node.isOpen} leaf={leaf} onToggle={() => node.toggle()} />
 
       <span className={isVirtualGroup ? 'text-[var(--accent)]' : 'text-[var(--text-dim)]'}>
@@ -224,6 +251,15 @@ export const NodeRow = memo(function NodeRow({
           {data.display_name || data.name}
         </span>
       )}
+
+      {!node.isOpen && childCount > 0 ? (
+        <span
+          className="shrink-0 rounded-full bg-[var(--hover)] px-1.5 text-[10px] leading-4 text-[var(--text-dim)]"
+          title={`${childCount} 个直接子节点，展开即可看到`}
+        >
+          {childCount}
+        </span>
+      ) : null}
 
       {data.status === 'paused' ? (
         <span className="tag tag-warn shrink-0">已暂停</span>

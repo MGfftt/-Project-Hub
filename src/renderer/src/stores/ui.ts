@@ -27,7 +27,8 @@ export const RIGHT_WIDTH_DEFAULT = 360
 export const RIGHT_WIDTH_MIN = 280
 export const RIGHT_WIDTH_MAX = 520
 
-export type MainView = 'tree' | 'timeline' | 'settings'
+/** The middle column's tab. It follows the selection, so it is never "empty". */
+export type MainView = 'overview' | 'timeline'
 export type DialogKind = 'stats' | 'icon' | 'settings' | 'confirm'
 export type StatusTone = 'info' | 'warn' | 'error'
 
@@ -101,7 +102,7 @@ async function persist(key: string, value: string): Promise<void> {
 }
 
 export const useUi = create<UiState>()((set, get) => ({
-  mainView: 'tree',
+  mainView: 'overview',
   setMainView: (v) => set({ mainView: v }),
 
   selectedId: null,
@@ -109,7 +110,11 @@ export const useUi = create<UiState>()((set, get) => ({
 
   expanded: {},
 
-  detailOpen: true,
+  /* The right column used to be open by default and repeated the overview's
+   * own name/kind/path rows side by side, which made the window read as two
+   * half-empty copies of the same thing. It now starts folded and the tab strip
+   * carries an 属性 toggle, so the default window is tree + overview. */
+  detailOpen: false,
   setDetailOpen: (open) => set({ detailOpen: open }),
 
   leftWidth: LEFT_WIDTH_DEFAULT,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { SlidersHorizontal } from 'lucide-react'
 import type { BackgroundStatus, TrayState } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useEvents } from '@renderer/stores/events'
@@ -10,6 +11,7 @@ import {
 } from '@renderer/lib/tree'
 import TreePanel from '@renderer/components/TreePanel'
 import Timeline from '@renderer/components/Timeline'
+import NodeOverview from '@renderer/components/NodeOverview'
 import DetailPanel from '@renderer/components/DetailPanel'
 import StatusBar from '@renderer/components/StatusBar'
 import EmptyState from '@renderer/components/EmptyState'
@@ -41,9 +43,14 @@ interface PendingConfirm {
 
 export function AppShell(): JSX.Element {
   const mainView = useUi((s) => s.mainView)
+  const setMainView = useUi((s) => s.setMainView)
+  const detailOpen = useUi((s) => s.detailOpen)
+  const setDetailOpen = useUi((s) => s.setDetailOpen)
+  const selectedId = useUi((s) => s.selectedId)
+  const nodeById = useTree((s) => s.byId)
+  const selected = selectedId == null ? null : (nodeById.get(selectedId) ?? null)
   const leftWidth = useUi((s) => s.leftWidth)
   const rightWidth = useUi((s) => s.rightWidth)
-  const detailOpen = useUi((s) => s.detailOpen)
   const dialog = useUi((s) => s.dialog)
   const dialogNodeId = useUi((s) => s.dialogNodeId)
 
@@ -269,12 +276,61 @@ export function AppShell(): JSX.Element {
         />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden" aria-label="主视图">
-          {mainView === 'timeline' ? (
-            <Timeline />
+          {/* The tab strip keeps the middle column tied to the selection: a
+              plain click on a tree node lands on 概览 instead of the old
+              "选择一个项目" placeholder, which read as "nothing happened". */}
+          <div
+            role="tablist"
+            aria-label="主视图切换"
+            className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainView === 'overview'}
+              className={mainView === 'overview' ? 'btn btn-primary' : 'btn btn-ghost'}
+              onClick={() => setMainView('overview')}
+            >
+              概览
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainView === 'timeline'}
+              className={mainView === 'timeline' ? 'btn btn-primary' : 'btn btn-ghost'}
+              onClick={() => setMainView('timeline')}
+            >
+              改动时间线
+            </button>
+            {selected ? (
+              <span className="ml-2 truncate text-[var(--font-minor)] text-[var(--text-dim)]">
+                {selected.display_name || selected.name}
+              </span>
+            ) : null}
+            <span className="flex-1" />
+            <button
+              type="button"
+              className={detailOpen ? 'btn btn-primary' : 'btn btn-ghost'}
+              aria-pressed={detailOpen}
+              title="显示或隐藏右侧属性面板（状态、图标、标签）"
+              onClick={() => setDetailOpen(!detailOpen)}
+            >
+              <SlidersHorizontal size={14} aria-hidden />
+              属性
+            </button>
+          </div>
+
+          {selected ? (
+            mainView === 'timeline' ? (
+              <Timeline />
+            ) : (
+              <NodeOverview node={selected} />
+            )
           ) : (
             <EmptyState
-              title="选择一个项目"
-              description="从左侧项目树中单击一个节点，即可查看它的改动时间线、热力图与属性。"
+              title="还没有选中任何节点"
+              description="在左侧项目树里点一个项目或分组，这里会显示它的概览；需要看改动就切到「改动时间线」。"
             />
           )}
         </main>

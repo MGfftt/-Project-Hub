@@ -183,6 +183,14 @@ project-hub/
 
 程序的全部数据始终写在 `%APPDATA%\project-hub\`，与安装位置无关。
 
+### 10. 界面速览
+
+窗口默认是**左树 + 中内容**两栏。左栏是项目树：每一行左侧的 `›` / `⌄` 展开折叠，缩进参考线标出层级，折叠的父节点会显示它藏了多少个子节点。**单击任意一行**，中间栏立刻切换到该节点的「概览」页——名称、类型、磁盘路径、常用操作（打开目录 / 在文件夹中显示 / 复制路径 / 重命名 / 统计）、八项关键数字，以及它自己的**子树**：同样是缩进的树状列表，可逐支折叠，单击任意一行就跳到那个节点。
+
+中间栏顶部是 `概览` 与 `改动时间线` 两个页签；最右侧的 `属性` 开关控制第三栏，用来改状态、图标和标签。默认收起，所以窗口只有两栏，界面更干净。
+
+要看提交历史，切到「改动时间线」，或在项目上右键选「查看改动」。全部数据与设置都在 `%APPDATA%\project-hub\`。
+
 ---
 
 ## English Documentation
@@ -349,6 +357,14 @@ If double-clicking `Project Hub.exe` produces no window, no error and no lingeri
 **Prefer the installer**: `release\Project Hub-2.0.0-win-x64.exe` installs to `%LOCALAPPDATA%\Programs\Project Hub` and creates Desktop and Start Menu shortcuts with no command-line arguments at all, so the renderer sandbox stays intact. If a silent install (`/S`) fails or hangs, run `$env:TEMP = $env:TMP = "$env:USERPROFILE\PHTemp"` before launching the installer: it crashes when it picks a temp directory inside a locked-down folder.
 
 All application data always lives in `%APPDATA%\project-hub\`, regardless of where the program is installed.
+
+### 10. Interface tour
+
+The window opens as two columns: **tree on the left, content in the middle**. In the tree the `›` / `⌄` on each row expands or collapses it, indent guides mark the levels, and a collapsed parent shows how many children it hides. **A single click on any row** switches the middle column to that node's overview — name, kind, disk path, the usual actions (open folder / reveal in Explorer / copy path / rename / stats), eight key figures, and the node's own **subtree**: an indented, foldable tree whose rows jump to that node when clicked.
+
+The middle column carries `概览` (overview) and `改动时间线` (change timeline) tabs, and `属性` (properties) on the right toggles a third column for status, icon and tags. It starts folded, so the default window stays a clean two-column view.
+
+To read commit history, switch to the change-timeline tab or right-click a project and pick 查看改动. All data and settings live in `%APPDATA%\project-hub\`.
 
 ---
 

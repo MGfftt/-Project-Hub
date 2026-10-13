@@ -456,28 +456,29 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                   ))}
                 </span>
               </Field>
-              <Field label="路径">
-                <span className="flex items-start gap-2">
-                  <span className="min-w-0 flex-1 break-all font-mono text-[11px]" title={path ?? ''}>
-                    {stats === null ? '…' : path ?? '—'}
+              <Field label="操作">
+                {path === null ? (
+                  <span className="text-[11px] text-[var(--text-dim)]">
+                    虚拟节点，没有对应的磁盘目录
                   </span>
-                  <button
-                    type="button"
-                    className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
-                    disabled={path === null}
-                    onClick={onCopyPath}
-                  >
-                    复制路径
-                  </button>
-                  <button
-                    type="button"
-                    className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
-                    disabled={path === null}
-                    onClick={onRevealFolder}
-                  >
-                    在文件管理器中显示
-                  </button>
-                </span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
+                      onClick={onCopyPath}
+                    >
+                      复制路径
+                    </button>
+                    <button
+                      type="button"
+                      className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
+                      onClick={onRevealFolder}
+                    >
+                      在文件管理器中显示
+                    </button>
+                  </span>
+                )}
               </Field>
             </Group>
 

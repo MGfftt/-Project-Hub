@@ -161,10 +161,23 @@ export function NodeTree({
     [canOpen, cancelPendingOpen, openFolder, requestStats]
   )
 
+  /* True while the sync effect below is replaying the store onto the library.
+   * react-arborist routes *every* open/close through `onToggle`, including the
+   * ones this component asks for, so without this guard the two would chase
+   * each other: replay opens a row → onToggle writes the store back → the store
+   * changes → the effect replays again. React counts those nested updates and
+   * aborts the whole tree with "Maximum update depth exceeded", which is what
+   * used to blank the window. */
+  const syncing = useRef(false)
+
   const handleToggle = useCallback(
     (id: string) => {
+      if (syncing.current) return
       const numeric = Number(id)
-      const nowOpen = !useTree.getState().open[numeric]
+      /* The library has already applied the change by the time it calls us, so
+       * its own state — not the inverse of the store — is what we record. */
+      const api = treeRef.current
+      const nowOpen = api ? api.isOpen(id) : !useTree.getState().open[numeric]
       useTree.getState().setOpen(numeric, nowOpen)
       if (nowOpen) requestStats(numeric)
     },
@@ -173,18 +186,25 @@ export function NodeTree({
 
   /* The store owns expansion, but react-arborist reads `initialOpenState` only
    * when it builds the tree, so 展开全部 / 折叠全部 (and every other writer of
-   * the store's `open` map) have to be replayed onto the live tree. Both loops
-   * are guarded by the library's own state, so they converge in one pass. */
+   * the store's `open` map) have to be replayed onto the live tree — in both
+   * directions, because 折叠全部 empties the map and the rows that are open in
+   * the library have to be closed from its side. `syncing` keeps that replay
+   * one-way, so it converges instead of oscillating. */
   useEffect(() => {
     const api = treeRef.current
     if (!api) return
-    for (const [key, value] of Object.entries(arboristOpen)) {
-      if (value && !api.isOpen(key)) api.open(key)
-      else if (!value && api.isOpen(key)) api.close(key)
-    }
-    const live = api.openState ?? {}
-    for (const key of Object.keys(live)) {
-      if (live[key] && !arboristOpen[key] && api.isOpen(key)) api.close(key)
+    syncing.current = true
+    try {
+      for (const [key, value] of Object.entries(arboristOpen)) {
+        if (value && !api.isOpen(key)) api.open(key)
+        else if (!value && api.isOpen(key)) api.close(key)
+      }
+      const live = api.openState ?? {}
+      for (const key of Object.keys(live)) {
+        if (live[key] && !arboristOpen[key] && api.isOpen(key)) api.close(key)
+      }
+    } finally {
+      syncing.current = false
     }
   }, [arboristOpen, nodes])
 
@@ -299,7 +319,17 @@ export function NodeTree({
         <Tree<TreeNode>
           ref={treeRef}
           data={nodes}
-          idAccessor="id"
+          /* The store keys nodes by integer id, but react-arborist only ever
+           * round-trips *string* identities: its `identify()` passes a string
+           * straight through and reads `.id` off a NodeApi, and for anything
+           * else it runs the accessor again. With a plain `idAccessor="id"` the
+           * ids stay numbers, so a click's `select()` → `setSelection({ ids:
+           * [4] })` → `identify(4)` re-runs the accessor on the *number* and
+           * stores `undefined` — the row paints as selected while
+           * `onSelect` reports an empty list, which is exactly the "clicking a
+           * node does nothing" failure. Stringifying here keeps every identity
+           * inside the tree a string (docs: "idAccessor must return a string"). */
+          idAccessor={(node) => String(node.id)}
           childrenAccessor="children"
           openByDefault={false}
           width={size.width || 320}

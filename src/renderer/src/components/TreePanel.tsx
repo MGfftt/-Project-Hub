@@ -149,9 +149,8 @@ export function TreePanel(): JSX.Element {
       const store = useTree.getState()
       if (parent != null) store.setOpen(parent, true)
       select(id)
-      useUi.getState().setDetailOpen(true)
       setScrollToId(id)
-      setStatus('已创建分组，可在右侧修改名称与标注', 'info')
+      setStatus('已创建分组，可在右侧「属性」里改名称与标注', 'info')
     } catch (err) {
       setStatus(`创建分组失败：${String(err)}`, 'error')
     }
