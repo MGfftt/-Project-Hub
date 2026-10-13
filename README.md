@@ -65,6 +65,23 @@ npm run test:unit
 npm run gate:v2
 ```
 
+**启动入口是 `src/main/index.ts`**（主进程），构建后对应 `out/main/index.cjs`，即 `package.json` 的 `main` 字段 —— Electron 从这里拉起整个应用。渲染进程入口是 `src/renderer/index.html`，预加载脚本是 `src/preload/index.ts`。
+
+除 `npm run dev` 外，也可以直接运行已构建的产物：
+
+```bash
+npm run build
+npm start                                  # 等价于 electron-vite preview
+# 或直接用 Electron 二进制打开本目录
+./node_modules/electron/dist/electron.exe .
+```
+
+> **`npm install` 会自动重建原生依赖。** `better-sqlite3` 是按 ABI 编译的：Electron 33 内嵌 Node 20.18.3（ABI 130），而系统 `node` 可能是 ABI 137。装错 ABI 的二进制会让应用在启动时直接崩溃，且 Electron 内部**没有** `node:sqlite` 回退可用。`postinstall` 会调用 `scripts/rebuild-native.mjs` 拉取对应 Electron 的预编译二进制（无需编译器）。若你用了 `npm install --ignore-scripts`，请补跑一次：
+>
+> ```bash
+> npm run rebuild:native
+> ```
+
 打包安装包：
 
 ```bash
@@ -181,6 +198,23 @@ npm run test:unit
 # Full gate: typecheck + tests + build
 npm run gate:v2
 ```
+
+**The startup entry point is `src/main/index.ts`** (the main process). Built, it becomes `out/main/index.cjs` — the `main` field in `package.json`, which is what Electron boots. The renderer entry is `src/renderer/index.html`; the preload script is `src/preload/index.ts`.
+
+Beyond `npm run dev`, you can run the built output directly:
+
+```bash
+npm run build
+npm start                                  # same as electron-vite preview
+# or hand the directory to the Electron binary
+./node_modules/electron/dist/electron.exe .
+```
+
+> **`npm install` rebuilds the native dependency for you.** `better-sqlite3` is ABI-specific: Electron 33 embeds Node 20.18.3 (ABI 130) while your system `node` may be ABI 137. An addon built for the wrong ABI makes the app die on startup, and there is **no** `node:sqlite` fallback available inside Electron. `postinstall` runs `scripts/rebuild-native.mjs`, which fetches the prebuilt binary for your Electron version — no compiler required. If you installed with `npm install --ignore-scripts`, run it yourself:
+>
+> ```bash
+> npm run rebuild:native
+> ```
 
 Packaging:
 

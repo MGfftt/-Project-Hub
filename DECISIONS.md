@@ -26,7 +26,7 @@ See [`docs/DATA-ISOLATION.md`](docs/DATA-ISOLATION.md).
 
 **Decision.** `src/main/db/sqlite.ts` probes for `better-sqlite3` at load time and, when the native addon cannot be loaded, falls back to Node's built-in `node:sqlite` (`DatabaseSync`) behind a `better-sqlite3`-compatible surface. It exports `driverName` so the running driver is observable (Settings → 数据 shows it).
 
-**Why.** `better-sqlite3` is built for the Electron ABI (137 / Electron 33). Under plain `node` (v24.19.0, ABI 137 but a different runtime) the addon cannot be located:
+**Why.** `better-sqlite3` is built for exactly one ABI. Electron 33 embeds Node 20.18.3 (module ABI **130**), while this machine's plain `node` is v24.19.0 (ABI **137**) — two different numbers, so one binary can never satisfy both. Under plain `node` the Electron-ABI addon cannot be located:
 
 ```
 Error: Could not locate the bindings file.
@@ -173,3 +173,47 @@ That threw inside `gitFor()`, which made `checkIsRepo()` fail, which made `probe
 **Why.** The project book is written in Chinese and its acceptance cases quote Chinese UI text verbatim (「路径不存在」, 「该项目暂无改动记录」, 「仅在本程序中显示，不会修改磁盘目录名」). Changing those strings would break the acceptance cases. The README is bilingual because the request explicitly asked for both.
 
 **Cost.** No i18n framework, so an English UI would require a real extraction pass. Out of scope for v1 (the book lists no localisation requirement).
+
+---
+
+## D-016 · `postinstall` fetches the prebuilt Electron addon instead of running `install-app-deps`
+
+**Decision.** `scripts/rebuild-native.mjs` runs as `postinstall` (and as `npm run rebuild:native`). It reads the installed Electron version, runs `npm rebuild better-sqlite3 --foreground-scripts` with `npm_config_runtime=electron`, `npm_config_target=<electron version>`, `npm_config_disturl=https://electronjs.org/headers` and `npm_config_build_from_source=false`, then asks Electron itself to `require('better-sqlite3')` to prove the addon loads.
+
+**Why.** A fresh `npm install` produces a **Node**-ABI addon, which the app — which only ever loads it from Electron — cannot use. The `node:sqlite` fallback of D-002 cannot cover the gap either:
+
+```
+$ ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/electron.exe -e "require('node:sqlite')"
+node 20.18.3 sqlite: NO - ERR_UNKNOWN_BUILTIN_MODULE
+```
+
+`node:sqlite` appears in Node 22.5, and Electron 33 ships 20.18.3. So without a correct addon the app dies on startup with `Could not locate the bindings file`, and no fallback exists inside Electron.
+
+**Rejected alternative — `electron-builder install-app-deps`.** It is the conventional one-liner and `electron-builder` is already a devDependency, but it drives `node-gyp`, which demands a full MSVC/Xcode toolchain. On a machine without one it fails **and destroys the working prebuilt addon**:
+
+```
+Error: Could not find any Visual Studio installation to use
+  ⨯ node-gyp failed to rebuild '…\node_modules\better-sqlite3'
+$ ELECTRON_RUN_AS_NODE=1 electron.exe -e "require('better-sqlite3')"
+LOAD_FAIL Could not locate the bindings file. Tried: …
+```
+
+`better-sqlite3`'s own installer prefers `prebuild-install`, which downloads a ready-made Electron binary and needs no compiler. Pinning `npm_config_build_from_source=false` guarantees it never falls through to `node-gyp`.
+
+**Cost.** The script `spawnSync`s npm, and the exit status is deliberately **always 0**: a failing `postinstall` aborts `npm install` entirely and would leave the user with no dependencies at all. Failures print a loud banner with the manual command instead. `--ignore-scripts` installs skip it, so the README documents `npm run rebuild:native` as the recovery step.
+
+---
+
+## D-017 · Git's repository search is bounded to the node's own directory
+
+**Decision.** `gitEnv()` takes the directory being queried and sets `GIT_CEILING_DIRECTORIES` to that directory's **parent**, so the ascent stops one level up. `gitFor(dir)` passes it. A node is therefore only ever treated as a repository if it has its own `.git`.
+
+**Why.** Git searches parent directories for a repository. A project folder without `.git` that sits inside an unrelated repository — `monorepo/packages/docs`, or any plain folder under a repo — resolved to the **enclosing** repository, and `syncAllGit` imported that repository's entire history under the wrong node. The scanner already disagrees with that: `walk.ts:154` derives `meta.isGit` from `<dir>/.git` alone, so the sync layer was the inconsistent one. The symptom showed up as wrong timelines, wrong 查看改动, and the same commit attributed to several sibling nodes.
+
+**Cost.** A subdirectory of a repository no longer inherits the parent's history. That is the intended behaviour — the scanner never classified such a directory as a git project in the first place — but it is a visible change for anyone who previously relied on the inherited view.
+
+**Note on the ceiling value.** It must be absolute, and a single entry needs no list separator, which sidesteps the `:`-versus-`;` difference between POSIX and Windows. When the directory *is* a filesystem root, `dirname() === resolve()` and the variable is left unset.
+
+**Guard.** `tests/unit/git.spec.ts` → 'a nested folder does not inherit the history of an enclosing repo (§14.1)' asserts that a folder inside a real repository reports `isRepo: false` and yields no log entries, while the enclosing repository itself stays readable.
+
+

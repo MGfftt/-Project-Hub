@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { writeFileSync, existsSync } from 'node:fs'
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { closeDatabase, initDatabase } from '../../src/main/db'
@@ -162,6 +162,30 @@ describe.skipIf(!hasGit)('git service (real repository)', () => {
     expect(await headHash(sb.dir('not-a-repo'))).toBeNull()
   })
 
+  it('a nested folder does not inherit the history of an enclosing repo (§14.1)', async () => {
+    // Regression: git searches parent directories for a repository, so asking
+    // about `outer/packages/docs` — which has no `.git` of its own — used to
+    // report the OUTER repository and import its entire history under the wrong
+    // node. `GIT_CEILING_DIRECTORIES` now stops the ascent at the directory's
+    // own parent, matching the scanner, which derives `meta.isGit` from
+    // `<dir>/.git` alone.
+    const outer = makeRepo('outer')
+    writeFileSync(join(outer, 'a.txt'), 'one\n')
+    git(outer, 'add', '.')
+    git(outer, 'commit', '-q', '-m', 'outer commit')
+
+    const nested = join(outer, 'packages', 'docs')
+    mkdirSync(nested, { recursive: true })
+
+    expect((await probeRepo(nested)).isRepo).toBe(false)
+    expect(await headHash(nested)).toBeNull()
+    expect(await logOnce(nested, 10)).toEqual([])
+    // The enclosing repository itself is still readable — the ceiling must not
+    // break the normal case.
+    expect((await probeRepo(outer)).isRepo).toBe(true)
+    expect((await logOnce(outer, 10)).length).toBe(1)
+  })
+
   it('syncRepo returns the commits with numstat data', async () => {
     const dir = makeRepo()
     writeFileSync(join(dir, 'a.txt'), 'one\ntwo\nthree\n')
@@ -253,7 +277,12 @@ describe.skipIf(!hasGit)('git service (real repository)', () => {
     git(dir, 'commit', '-q', '-m', 'first')
     const log = await logOnce(dir, 5)
     expect(log.length).toBe(1)
-    const empty = await logOnce(sb.dir('nope'), 5)
+    // A directory that does not exist, rather than `sb.dir(...)`: git searches
+    // parent directories for a repository, so a merely empty directory reports
+    // whatever repository encloses the OS temp dir. That made this assertion
+    // depend on where TMPDIR points (it fails when TEMP is set inside a repo).
+    // A missing directory cannot resolve to a repository at all.
+    const empty = await logOnce(join(sb.root, 'nope-does-not-exist'), 5)
     expect(empty).toEqual([])
   })
 })

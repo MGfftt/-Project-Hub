@@ -26,6 +26,8 @@
     "bench:scan": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/bench-scan.mts",
     "gen:fixture": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/gen-big-fixture.mts",
     "sync:schema": "node scripts/sync-schema.mjs",
+    "rebuild:native": "node scripts/rebuild-native.mjs",
+    "postinstall": "node scripts/rebuild-native.mjs",
     "gate:v2": "npm run typecheck && npm run test:unit && npm run build"
   },
   "dependencies": {

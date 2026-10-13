@@ -9,6 +9,7 @@
  *     (`parseNumstatLog`) that unit tests can exercise with fixture text.
  */
 import { simpleGit, type SimpleGit, type DefaultLogFields, type ListLogLine } from 'simple-git'
+import { dirname, resolve } from 'node:path'
 import type { RawGitEvent } from '../../shared/types'
 import { createLogger } from '../utils/logger'
 
@@ -57,14 +58,31 @@ const UNSAFE_ENV_KEYS = new Set([
   'GIT_DIFF_OPTS'
 ])
 
-export function gitEnv(): Record<string, string> {
+/**
+ * Environment handed to every git child.
+ *
+ * `ceilingDir` — git searches *parent* directories for a repository, so asking
+ * about `…/monorepo/packages/docs` (which has no `.git` of its own) silently
+ * reports the enclosing monorepo and imports its whole history under the wrong
+ * node. `GIT_CEILING_DIRECTORIES` stops that ascent at the directory's own
+ * parent, so a node only ever sees a repository it actually owns. This mirrors
+ * the scanner, which marks `meta.isGit` from `<dir>/.git` alone (walk.ts:154).
+ */
+export function gitEnv(ceilingDir?: string): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined) continue
     if (UNSAFE_ENV_KEYS.has(key.toUpperCase())) continue
     env[key] = value
   }
-  return { ...env, ...READ_ONLY_ENV }
+  const merged: Record<string, string> = { ...env, ...READ_ONLY_ENV }
+  if (ceilingDir) {
+    // Must be absolute. A single entry needs no list separator, which avoids the
+    // `:`-vs-`;` difference between POSIX and Windows.
+    const parent = dirname(resolve(ceilingDir))
+    if (parent !== resolve(ceilingDir)) merged.GIT_CEILING_DIRECTORIES = parent
+  }
+  return merged
 }
 
 export function gitFor(dir: string): SimpleGit {
@@ -74,7 +92,7 @@ export function gitFor(dir: string): SimpleGit {
     maxConcurrentProcesses: 2,
     trimmed: true,
     config: ['core.quotepath=false']
-  }).env(gitEnv())
+  }).env(gitEnv(dir))
 }
 
 /** Cheap probe used by the stats drawer and the tray tooltip. */
