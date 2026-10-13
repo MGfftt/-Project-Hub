@@ -102,6 +102,14 @@ function buildStatements(db: DB) {
       `INSERT INTO nodes (root_id, parent_id, name, path, kind, status, sort_order, created_at, updated_at)
        VALUES (NULL, ?, ?, NULL, 'group', 'active', ?, ?, ?)`
     ),
+    // A note is a virtual node too: it carries no disk path, so the scanner's
+    // `path IS NOT NULL` filters never see it and a rescan cannot disturb it.
+    insertNote: db.prepare(
+      `INSERT INTO nodes (root_id, parent_id, name, path, kind, status, sort_order,
+                          icon_type, icon_value, meta, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, 'note', 'active', ?, 'emoji', '📝', ?, ?, ?)`
+    ),
+    updateNoteText: db.prepare(`UPDATE nodes SET meta = ?, name = ?, updated_at = ? WHERE id = ?`),
     nodeById: db.prepare(`SELECT * FROM nodes WHERE id = ?`),
     nodeByPath: db.prepare(`SELECT * FROM nodes WHERE path = ?`),
     nodeByRootPath: db.prepare(`SELECT * FROM nodes WHERE root_id = ? AND path = ?`),
@@ -270,6 +278,13 @@ function parseMeta(json: string | null): Record<string, unknown> {
   }
 }
 
+/** The node's `name` for a note is a one-line excerpt; the body lives in `meta.text`. */
+export function noteTitle(text: string): string {
+  const firstLine = (text ?? '').split(/\r?\n/)[0].trim()
+  if (!firstLine) return '新备注'
+  return firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine
+}
+
 export function toTreeNode(n: NodeRecord): TreeNode {
   return {
     id: n.id,
@@ -436,6 +451,42 @@ export const repo = {
     return Number(info.lastInsertRowid)
   },
 
+  /**
+   * Create a note attached to `parentId` (or floating at the top level when
+   * null). Notes are how the map gets annotated: they point at a project or a
+   * group without pretending to be a directory on disk.
+   */
+  createNote(parentId: number | null, text = ''): number {
+    dbh()
+    const parent = parentId === null ? undefined : row<NodeRecord>(statements.nodeById.get(parentId))
+    if (parentId !== null && !parent) throw new Error(`[repo] parent node ${parentId} not found`)
+    // Inherit the parent's root so the note disappears with it (ON DELETE CASCADE)
+    // and so per-root tree queries keep it next to what it annotates.
+    const rootId = parent?.root_id ?? null
+    const ts = now()
+    const max = row<{ m: number | null }>(statements.maxSiblingSort.get(parentId))
+    const info = statements.insertNote.run(
+      rootId,
+      parentId,
+      noteTitle(text),
+      Number(max?.m ?? -1) + 1,
+      JSON.stringify({ text }),
+      ts,
+      ts
+    )
+    return Number(info.lastInsertRowid)
+  },
+
+  setNoteText(id: number, text: string): void {
+    dbh()
+    const cur = row<NodeRecord>(statements.nodeById.get(id))
+    if (!cur) throw new Error(`[repo] node ${id} not found`)
+    if (cur.kind !== 'note') throw new Error(`[repo] node ${id} is not a note`)
+    const meta = parseMeta(cur.meta)
+    meta.text = text
+    statements.updateNoteText.run(JSON.stringify(meta), noteTitle(text), now(), id)
+  },
+
   getNode(id: number): NodeRecord | undefined {
     dbh()
     return row<NodeRecord>(statements.nodeById.get(id))
@@ -525,7 +576,12 @@ export const repo = {
       if (depthAbove + depthBelow > 64) throw new Error('[repo] move would exceed max depth 64')
 
       const parentRow = parentId === null ? undefined : row<NodeRecord>(statements.nodeById.get(parentId))
-      const newRootId = parentId === null ? null : parentRow?.root_id ?? null
+      /* `root_id` records which disk root discovered the node — it is what makes
+       * `(root_id, path)` unique to the scanner. A virtual group carries no
+       * root_id, so letting it flow into the child would clash with `UNIQUE`
+       * (NULLs are distinct in SQLite) and the next scan would insert a second
+       * node for the same folder. Keep the node's own root instead. */
+      const newRootId = parentId === null ? node.root_id : (parentRow?.root_id ?? node.root_id)
 
       // Re-index siblings around the insertion point.
       const siblings = rows<NodeRecord>(statements.listChildNodes.all(parentId)).filter((n) => n.id !== id)
@@ -948,7 +1004,14 @@ export function buildTree(flat: TreeNode[]): TreeNode[] {
     for (const n of list) if (n.children?.length) sortRec(n.children)
   }
   sortRec(roots)
-  for (const n of byId.values()) if (n.children && n.children.length === 0) delete n.children
+  /* A childless node is a leaf everywhere except for groups: react-arborist
+   * decides `isLeaf` with `!Array.isArray(children)` (node-api.js:51) and only a
+   * node it considers *internal* offers the "drop inside" target
+   * (dnd/compute-drop.js:86). Without this an empty group cannot be dragged into
+   * until it already has a child. */
+  for (const n of byId.values()) {
+    if (n.children && n.children.length === 0 && n.kind !== 'group') delete n.children
+  }
   return roots
 }
 

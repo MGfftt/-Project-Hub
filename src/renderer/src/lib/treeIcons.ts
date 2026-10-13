@@ -17,7 +17,8 @@ import type { NodeKind, TreeNode } from '@shared/types'
 const KIND_FALLBACK: Record<NodeKind, string> = {
   group: 'layers',
   project: 'package',
-  folder: 'folder'
+  folder: 'folder',
+  note: 'lightbulb'
 }
 
 /**

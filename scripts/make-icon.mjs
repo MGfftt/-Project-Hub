@@ -161,7 +161,40 @@ const encodePng = (rgba, size) => {
   ])
 }
 
-/** PNG-in-ICO container: one directory entry per size, offsets after the header. */
+/**
+ * A 32-bit BMP (DIB) entry.
+ *
+ * Windows' classic icon APIs — `ExtractIconEx`, `LoadImage`, the shell's icon
+ * cache — cannot decode a PNG entry, they only accept a BITMAPINFOHEADER with
+ * the bitmap stored bottom-up. GDI+ throws "Requested range extends past the
+ * end of the array" on a PNG entry it cannot parse, so an all-PNG ICO renders
+ * blank wherever those APIs are used. Only the 256 px slot is PNG, where the
+ * format is both blessed and necessary.
+ */
+const encodeDib = (rgba, size) => {
+  const header = Buffer.alloc(40)
+  header.writeUInt32LE(40, 0)
+  header.writeInt32LE(size, 4)
+  header.writeInt32LE(size * 2, 8) // XOR bitmap plus the AND mask
+  header.writeUInt16LE(1, 12)
+  header.writeUInt16LE(32, 14)
+  header.writeUInt32LE(0, 16)
+  const xor = Buffer.alloc(size * size * 4)
+  for (let y = 0; y < size; y++) {
+    const src = (size - 1 - y) * size * 4
+    const dst = y * size * 4
+    for (let x = 0; x < size; x++) {
+      xor[dst + x * 4] = rgba[src + x * 4 + 2]
+      xor[dst + x * 4 + 1] = rgba[src + x * 4 + 1]
+      xor[dst + x * 4 + 2] = rgba[src + x * 4]
+      xor[dst + x * 4 + 3] = rgba[src + x * 4 + 3]
+    }
+  }
+  const maskStride = Math.ceil(size / 32) * 4
+  return Buffer.concat([header, xor, Buffer.alloc(maskStride * size)])
+}
+
+/** ICO container: one directory entry per size, offsets after the header. */
 const encodeIco = (images) => {
   const header = Buffer.alloc(6)
   header.writeUInt16LE(0, 0)
@@ -169,7 +202,7 @@ const encodeIco = (images) => {
   header.writeUInt16LE(images.length, 4)
   const dir = Buffer.alloc(16 * images.length)
   let offset = header.length + dir.length
-  images.forEach(({ size, png }, i) => {
+  images.forEach(({ size, data }, i) => {
     const e = i * 16
     dir[e] = size >= 256 ? 0 : size
     dir[e + 1] = size >= 256 ? 0 : size
@@ -177,19 +210,22 @@ const encodeIco = (images) => {
     dir[e + 3] = 0
     dir.writeUInt16LE(1, e + 4)
     dir.writeUInt16LE(32, e + 6)
-    dir.writeUInt32LE(png.length, e + 8)
+    dir.writeUInt32LE(data.length, e + 8)
     dir.writeUInt32LE(offset, e + 12)
-    offset += png.length
+    offset += data.length
   })
-  return Buffer.concat([header, dir, ...images.map((i) => i.png)])
+  return Buffer.concat([header, dir, ...images.map((i) => i.data)])
 }
 
-const images = SIZES.map((size) => ({ size, png: encodePng(render(size), size) }))
+const images = SIZES.map((size) => {
+  const rgba = render(size)
+  return size >= 256 ? { size, data: encodePng(rgba, size) } : { size, data: encodeDib(rgba, size) }
+})
 mkdirSync(OUT_DIR, { recursive: true })
 const icoPath = join(OUT_DIR, 'icon.ico')
 writeFileSync(icoPath, encodeIco(images))
 const pngPath = join(OUT_DIR, 'icon.png')
-writeFileSync(pngPath, images[images.length - 1].png)
+writeFileSync(pngPath, encodePng(render(256), 256))
 console.log(
-  `make-icon: ${SIZES.join(',')} -> ${icoPath} (${images.reduce((n, i) => n + i.png.length, 0)} bytes of PNG) and icon.png`
+  `make-icon: ${SIZES.join(',')} -> ${icoPath} (${images.reduce((n, i) => n + i.data.length, 0)} bytes) and icon.png`
 )

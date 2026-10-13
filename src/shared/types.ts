@@ -3,7 +3,7 @@
  * This file must stay free of Node and DOM APIs so both sides can use it.
  */
 
-export type NodeKind = 'group' | 'project' | 'folder'
+export type NodeKind = 'group' | 'project' | 'folder' | 'note'
 export type NodeStatus = 'active' | 'paused' | 'done' | 'archived'
 export type IconType = 'auto' | 'lucide' | 'emoji' | 'image'
 export type EventSource = 'git' | 'fs' | 'manual'
@@ -225,6 +225,9 @@ export interface Api {
     update(id: number, patch: NodePatch): Promise<void>
     move(id: number, parentId: number | null, index: number): Promise<void>
     createGroup(name: string, parentId: number | null): Promise<number>
+    /** A virtual note node: `kind === 'note'`, no disk path, body stored in `meta.text`. */
+    createNote(parentId: number | null, text?: string): Promise<number>
+    setNote(id: number, text: string): Promise<void>
     remove(id: number): Promise<void>
     detail(id: number): Promise<NodeDetail | null>
     stats(nodeId: number): Promise<NodeStats>

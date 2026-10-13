@@ -323,4 +323,30 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 
 **Lesson.** In an app that mirrors the disk, "delete" is two operations: forget this row, and never look at this path again. The second one needs somewhere to live, and every place that reads the table has to agree about it. The deliberate way back matters too — cascading the tombstones with the root gives users an obvious undo without a hidden-flag query.
 
+---
+
+## D-024 · The tray icon is drawn in-process, the tree keeps its placement, and the map can be annotated
+
+**Context.** A round of use found four separate defects: Task Manager (and the notification area) showed no icon for the app; dragging a project into a group and restarting produced a second copy of that project; a project could not be dragged into an empty group at all; and the workspace map could only display, never hold a note.
+
+**1. The icon never existed at runtime.** `src/main/tray/icon.ts` built the tray image with `nativeImage.createFromDataURL('data:image/svg+xml;base64,…')`. Electron's `nativeImage` **decodes PNG only** — the same call with `image/svg+xml` returns an empty image, silently. The tray therefore fell back to a transparent placeholder, which is exactly the blank square the user photographed in the notification area. `scripts/make-icon.mjs` was a build-time script and never had a runtime counterpart.
+
+**Decision.** Add `src/main/icon/render.ts`: a dependency-free rasteriser and PNG encoder (own CRC32, `zlib.deflateSync`) that draws the same three-hub mark as `src/main/tray/icon.ts` always intended. `createTrayIcon()` now feeds it straight into `nativeImage.createFromBuffer` and adds a 2× representation; `createAppIcon()` supplies a 256px window icon so the taskbar and Alt-Tab do not fall back to Electron's default either. The pure module is also reachable from Node (`node --experimental-strip-types`) for eyeballing a render.
+
+**Why not keep the SVG.** `nativeImage` is the only image type `Tray` accepts, and it has no SVG decoder. Shipping a pre-rendered PNG would mean a binary in the repo and a second source of truth next to `make-icon.mjs`; the rasteriser is ~150 lines and both paths (tray, window) read from it.
+
+**Side effect — the ICO.** The build-time writer wrapped *all* seven sizes as PNG entries. GDI+ (which Task Manager, the file-properties dialog and `ExtractAssociatedIcon` use) decodes PNG entries only up to 48px and threw `Requested range extends past the end of the array` on 64/128/256. `encodeIco` now emits a classic 32-bit DIB (BITMAPINFOHEADER, doubled height, bottom-up BGRA, empty AND mask) for every size below 256 and keeps the PNG entry only for 256, which is the format's own rule. `build/icon.ico` went from 14,933 to 108,690 bytes.
+
+**2. A move used to delete the node's root.** `repo.moveNode` set `root_id = parentRow.root_id`, and a virtual group has `root_id = NULL`. `UNIQUE(root_id, path)` treats NULLs as distinct, so the moved node no longer occupied its `(root, path)` slot and the next scan inserted a *second* row for the same folder. Two fixes: `moveNode` keeps the node's own `root_id` when the parent has none, and `applyBatch` no longer writes `parent_id` at all when refreshing a known node. Placement is the user's decision; only `kind`/`meta`/`path_missing` come from the disk.
+
+**3. An empty group was a leaf.** `buildTree` deleted empty `children` arrays. react-arborist computes `isLeaf` as `!Array.isArray(children)` and only an *internal* node exposes the "drop inside" target, so a group could not receive a drop until it already had a child. Empty arrays are now kept for `kind === 'group'`; the map's expander still checks `children.length > 0`, so nothing looks expandable that is not.
+
+**4. Notes.** A note is a node with `kind = 'note'`, no path, `icon_type = 'emoji'`, `icon_value = '📝'`, and its body in `meta.text`; the row's `name` is a one-line excerpt so the tree and the map can label it without loading a body. It is created from the map toolbar or any overview page, attached to whatever is selected. No new table and no migration: `kind` was already a free-text column, `meta` was already carried on the wire, and every scanner query filters on `path IS NOT NULL`, so a rescan cannot disturb a note. The body auto-saves 600ms after typing stops and on blur.
+
+**Evidence.** `npm run typecheck` and `npm run test:unit` (176 tests) exit 0. Over CDP against the real UI: an empty group reports `children: []`; moving `alpha` (id 2) into a group keeps `root_id: 1` and leaves exactly one row for that path, before and after a rescan, with `parent_id` still the group; the note created by 添加备注 renders its own page and a typed body round-trips as `{"name":"第一行：这个是备注","text":"第一行：这个是备注\n第二行：测试自动保存"}`. No console errors in any step.
+
+**Cost.** ~150 lines of image code that must stay in step with `make-icon.mjs`'s geometry (both draw the same mark; the shapes are duplicated by necessity — one runs in the build script, one in the main process). A group with no children now carries an empty array over IPC. Notes are one more virtual kind the renderer has to label in four places.
+
+**Lesson.** `nativeImage.createFromDataURL` failing silently is the whole bug: an icon that is never set looks exactly like an icon that is set to nothing, and no log line distinguishes them. When a library accepts several input flavours, test the one you actually ship.
+
 

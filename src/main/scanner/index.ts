@@ -168,8 +168,11 @@ function applyBatch(
       const prev = existing.get(key)
 
       if (prev !== undefined) {
-        // Already indexed: refresh the filesystem-derived fields only. Annotations
-        // (note/display_name/icon/tags/color) are never touched by a rescan.
+        /* Already indexed: refresh the filesystem-derived fields only. Annotations
+         * (note/display_name/icon/tags/color) are never touched by a rescan, and
+         * neither is `parent_id`: the user may have dragged this node into a
+         * group, and re-asserting the disk parent here would silently move it
+         * back out on the next scan. Placement is the user's, kind is the disk's. */
         const nextMeta = {
           marker: dir.marker,
           projectKind: dir.projectKind,
@@ -190,15 +193,13 @@ function applyBatch(
           if (metaChanged) {
             db.prepare(
               `UPDATE nodes
-                  SET parent_id = @parent_id,
-                      kind      = @kind,
+                  SET kind      = @kind,
                       meta      = @meta,
                       path_missing = 0,
                       updated_at = @updated_at
                 WHERE id = @id`
             ).run({
               id: prev.id,
-              parent_id: parentId,
               kind: dir.kind,
               meta: JSON.stringify(nextMeta),
               updated_at: Date.now()
@@ -208,11 +209,10 @@ function applyBatch(
           } else {
             db.prepare(
               `UPDATE nodes
-                  SET parent_id = @parent_id,
-                      path_missing = 0,
+                  SET path_missing = 0,
                       updated_at = @updated_at
                 WHERE id = @id`
-            ).run({ id: prev.id, parent_id: parentId, updated_at: Date.now() })
+            ).run({ id: prev.id, updated_at: Date.now() })
           }
         } catch (err) {
           log.warn('update during scan failed', { path: dir.path, err: (err as Error).message })

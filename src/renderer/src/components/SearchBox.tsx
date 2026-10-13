@@ -39,7 +39,12 @@ const MATCH_LABEL: Record<string, string> = {
   note: '备注'
 }
 
-const KIND_LABEL: Record<NodeKind, string> = { group: '分组', project: '项目', folder: '文件夹' }
+const KIND_LABEL: Record<NodeKind, string> = {
+  group: '分组',
+  project: '项目',
+  folder: '文件夹',
+  note: '备注'
+}
 
 function labelOf(hit: SearchHit): string {
   return hit.displayName || hit.name

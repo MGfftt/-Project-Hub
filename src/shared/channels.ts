@@ -20,6 +20,8 @@ export const CH = {
     update: 'nodes:update',
     move: 'nodes:move',
     createGroup: 'nodes:createGroup',
+    createNote: 'nodes:createNote',
+    setNote: 'nodes:setNote',
     remove: 'nodes:remove',
     detail: 'nodes:detail',
     stats: 'nodes:stats',

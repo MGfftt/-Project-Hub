@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Maximize2, Minus, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Maximize2, Minus, Plus, StickyNote } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
@@ -51,7 +51,8 @@ const ACCENT: Record<string, string> = {
   generic: '#94a3b8',
   project: '#3b82f6',
   folder: '#94a3b8',
-  group: '#a855f7'
+  group: '#a855f7',
+  note: '#f59e0b'
 }
 
 interface Placed {
@@ -124,6 +125,7 @@ export function ProjectMap(): JSX.Element {
   const select = useUi((s) => s.select)
   const setMainView = useUi((s) => s.setMainView)
   const selectedId = useUi((s) => s.selectedId)
+  const setStatus = useUi((s) => s.setStatus)
   const setOpen = useTree((s) => s.setOpen)
   const toggleOpen = useTree((s) => s.toggleOpen)
 
@@ -186,6 +188,21 @@ export function ProjectMap(): JSX.Element {
   const projectCount = placed.filter((p) => p.node.kind === 'project').length
   const groupCount = placed.filter((p) => p.node.kind === 'group').length
   const folderCount = placed.filter((p) => p.node.kind === 'folder').length
+  const noteCount = placed.filter((p) => p.node.kind === 'note').length
+
+  /** Annotate whatever is selected, so the map is a place to think, not just look. */
+  function addNote(): void {
+    void window.hub?.nodes
+      .createNote(selectedId, '')
+      .then((id) => {
+        setStatus('已添加备注，写好内容后它会挂在这个节点下面', 'info')
+        return useTree.getState().load().then(() => {
+          if (selectedId != null) useTree.getState().setOpen(selectedId, true)
+          select(id)
+        })
+      })
+      .catch((err: unknown) => setStatus(`添加备注失败：${String(err)}`, 'error'))
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -196,7 +213,21 @@ export function ProjectMap(): JSX.Element {
         <Legend color={ACCENT.project} label="项目" count={projectCount} />
         <Legend color={ACCENT.group} label="分组" count={groupCount} />
         <Legend color={ACCENT.folder} label="目录" count={folderCount} />
+        {noteCount > 0 ? <Legend color={ACCENT.note} label="备注" count={noteCount} /> : null}
         <span className="flex-1" />
+        <button
+          type="button"
+          className="btn"
+          title={
+            selectedId == null
+              ? '先选一个节点，备注就会挂在它下面'
+              : '在当前选中的节点下添加一条备注'
+          }
+          onClick={addNote}
+        >
+          <StickyNote size={13} aria-hidden />
+          添加备注
+        </button>
         <span className="hidden sm:inline">单击卡片选中并查看，点箭头展开或收起</span>
         <span className="flex items-center gap-1">
           <button type="button" className="btn btn-ghost" title="缩小" onClick={() => zoom(-0.1)}>
@@ -293,7 +324,12 @@ export function ProjectMap(): JSX.Element {
                     type="button"
                     data-map-label={node.id}
                     className="focus-ring flex min-w-0 flex-1 items-center gap-1.5 rounded px-0.5 py-0.5 text-left"
-                    title={node.path ?? `${label}（虚拟分组）`}
+                    title={
+                      node.path ??
+                      (node.kind === 'note'
+                        ? `备注：${String((node.meta?.text as string) ?? '') || '（空白）'}`
+                        : `${label}（虚拟分组）`)
+                    }
                     onClick={() => onCardClick(node)}
                   >
                     <span
@@ -305,8 +341,12 @@ export function ProjectMap(): JSX.Element {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] leading-4">{label}</span>
                       <span className="block truncate text-[10px] leading-3 text-[var(--text-dim)]">
-                        {kindLabel(node.kind)}
-                        {children.length > 0 ? ` · ${children.length} 个子节点` : ''}
+                        {node.kind === 'note'
+                          ? String((node.meta?.text as string) ?? '').split(/\r?\n/)[0] || '空白备注'
+                          : kindLabel(node.kind)}
+                        {node.kind !== 'note' && children.length > 0
+                          ? ` · ${children.length} 个子节点`
+                          : ''}
                       </span>
                     </span>
                     <span

@@ -114,6 +114,9 @@ const api: HubApi = {
       invoke<void>(CH.nodes.move, id, parentId, index),
     createGroup: (name: string, parentId: number | null) =>
       invoke<number>(CH.nodes.createGroup, name, parentId),
+    createNote: (parentId: number | null, text?: string) =>
+      invoke<number>(CH.nodes.createNote, parentId, text),
+    setNote: (id: number, text: string) => invoke<void>(CH.nodes.setNote, id, text),
     remove: (id: number) => invoke<void>(CH.nodes.remove, id),
     detail: (id: number) => invoke<NodeDetail | null>(CH.nodes.detail, id),
     stats: (nodeId: number) => invoke<NodeStats>(CH.nodes.stats, nodeId),

@@ -102,15 +102,15 @@ export function NodeTree({
 
   /** §8.1 — the click contract, with the double-click guard. */
   const openFolder = useCallback((node: TreeNode) => {
-    if (node.kind === 'group' && !node.path) return
+    // Groups and notes are virtual: there is no directory to open.
+    if (!node.path) return
     void window.hub.shell.openFolder(node.id).catch((err: unknown) => {
       useUi.getState().setStatus(`打开失败：${String(err)}`, 'error')
     })
   }, [])
 
   const canOpenFolder = useCallback(
-    (node: TreeNode): boolean =>
-      clickToOpen && !(node.kind === 'group' && !node.path) && node.path_missing !== 1,
+    (node: TreeNode): boolean => clickToOpen && Boolean(node.path) && node.path_missing !== 1,
     [clickToOpen]
   )
 

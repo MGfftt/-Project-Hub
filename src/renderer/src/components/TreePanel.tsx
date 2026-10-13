@@ -40,7 +40,8 @@ import { descendantIds } from '@renderer/lib/tree'
 const KIND_LABEL: Record<string, string> = {
   group: '分组',
   project: '项目',
-  folder: '文件夹'
+  folder: '文件夹',
+  note: '备注'
 }
 
 /** One confirmation dialog serves every destructive action in this panel. */

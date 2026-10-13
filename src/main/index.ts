@@ -31,7 +31,7 @@ import { Scheduler } from './background/scheduler'
 import { registerAllTasks, syncAllGit, type TaskContext } from './background/tasks'
 import { addLogSink, createLogger, setLogLevel, type LogLevel } from './utils/logger'
 import { noteActivity } from './utils/power'
-import { createTrayIcon } from './tray/icon'
+import { createAppIcon, createTrayIcon } from './tray/icon'
 
 const log = createLogger('boot')
 
@@ -168,6 +168,7 @@ const preloadPath = join(__dirname, '../preload/index.cjs')
 
 function createWindow(): BrowserWindow {
   const settings = safeSettings()
+  const icon = createAppIcon()
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -175,6 +176,9 @@ function createWindow(): BrowserWindow {
     minHeight: 620,
     show: false,
     autoHideMenuBar: true,
+    // Without this the taskbar and Alt-Tab carry Electron's own icon in
+    // development, where `process.execPath` is electron.exe.
+    ...(icon.isEmpty() ? {} : { icon }),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#14161a' : '#f6f7f9',
     title: 'Project Hub',
     webPreferences: {

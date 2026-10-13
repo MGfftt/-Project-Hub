@@ -117,10 +117,11 @@ export const NodeRow = memo(function NodeRow({
   const title = useMemo(() => {
     const parts = [data.display_name || data.name]
     if (data.path) parts.push(data.path)
+    else if (data.kind === 'note') parts.push(String((data.meta?.text as string) ?? '') || '空白备注')
     else if (isVirtualGroup) parts.push('虚拟分组（无磁盘目录）')
-    parts.push('单击打开目录 · 双击展开或折叠')
+    parts.push(data.kind === 'note' ? '单击查看 · 双击展开或折叠' : '单击查看 · 双击展开或打开目录')
     return parts.join('\n')
-  }, [data.display_name, data.name, data.path, isVirtualGroup])
+  }, [data.display_name, data.name, data.path, data.kind, data.meta, isVirtualGroup])
 
   const tags = useMemo(() => {
     const list = Array.isArray(data.tags) ? data.tags : []

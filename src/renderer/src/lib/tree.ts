@@ -108,6 +108,9 @@ export function kindLabel(kind: TreeNode['kind']): string {
     case 'project':
       return '项目'
     case 'folder':
+      return '目录'
+    case 'note':
+      return '备注'
     default:
       return '目录'
   }

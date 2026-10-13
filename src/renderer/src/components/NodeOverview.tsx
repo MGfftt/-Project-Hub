@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BarChart3,
   ChevronDown,
@@ -8,7 +8,8 @@ import {
   FolderTree,
   Layers,
   Link as LinkIcon,
-  Pencil
+  Pencil,
+  StickyNote
 } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
 import { NodeIcon } from '@renderer/components/NodeIcon'
@@ -176,10 +177,49 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
     })
   }
 
-  const isVirtualGroup = live.kind === 'group' && !live.path
+  const isNote = live.kind === 'note'
   const children = childrenOf(live)
   /** Everything the member list renders, i.e. the deep count (§ header). */
   const memberTotal = descendantIds(live, byId).length - 1
+
+  /* Note bodies live in `meta.text` and are edited here. The draft is local so
+     typing never waits for the broadcast round trip; `savedRef` keeps the
+     background `treeUpdated` reload from stomping on what is being typed. */
+  const [noteText, setNoteText] = useState(() => String((live.meta?.text as string) ?? ''))
+  const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const savedRef = useRef(noteText)
+  const noteTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    const stored = String((live.meta?.text as string) ?? '')
+    if (stored !== savedRef.current) {
+      savedRef.current = stored
+      setNoteText(stored)
+    }
+    // Only react to the node identity: `live` changes on every tree broadcast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.id])
+
+  /* Auto-save on a short idle, plus an explicit flush on blur. */
+  useEffect(() => {
+    if (!isNote) return
+    if (noteText === savedRef.current) return
+    if (noteTimer.current != null) window.clearTimeout(noteTimer.current)
+    noteTimer.current = window.setTimeout(() => {
+      noteTimer.current = null
+      if (noteText === savedRef.current) return
+      savedRef.current = noteText
+      setNoteState('saving')
+      void window.hub?.nodes
+        .setNote(node.id, noteText)
+        .then(() => setNoteState('saved'))
+        .catch(() => setNoteState('idle'))
+    }, 600)
+    return () => {
+      if (noteTimer.current != null) window.clearTimeout(noteTimer.current)
+      noteTimer.current = null
+    }
+  }, [isNote, noteText, node.id])
 
   /* The middle column is the only place that always shows the node, so it is
      also the natural place to ask for the on-disk numbers. */
@@ -219,6 +259,20 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
         })
       })
       .catch((err: unknown) => setStatus(`新建分组失败：${String(err)}`, 'error'))
+  }
+
+  /** Notes hang off any node; they are how the map gets annotated. */
+  function addChildNote(): void {
+    void window.hub?.nodes
+      .createNote(node.id, '')
+      .then((id) => {
+        setStatus('已添加备注，在中间栏直接写内容即可', 'info')
+        return useTree.getState().load().then(() => {
+          useTree.getState().setOpen(node.id, true)
+          select(id)
+        })
+      })
+      .catch((err: unknown) => setStatus(`添加备注失败：${String(err)}`, 'error'))
   }
 
   return (
@@ -269,16 +323,48 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
         </div>
 
         <p className="truncate text-xs text-[var(--text-dim)]" title={live.path ?? undefined}>
-          {live.path ?? '虚拟分组（没有对应的磁盘目录，只用来归类其它节点）'}
+          {live.path ??
+            (isNote
+              ? '备注节点（只保存在本地数据库里，不指向磁盘文件）'
+              : '虚拟分组（没有对应的磁盘目录，只用来归类其它节点）')}
         </p>
+
+        {/* --- note body ---------------------------------------------------- */}
+        {isNote ? (
+          <section>
+            <h2 className="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
+              <StickyNote size={14} aria-hidden />
+              备注内容
+              <span className="text-[var(--font-minor)] text-[var(--text-dim)]">
+                {noteState === 'saving' ? '保存中…' : noteState === 'saved' ? '已保存' : '自动保存'}
+              </span>
+            </h2>
+            <textarea
+              className="input h-40 w-full resize-y font-mono text-xs leading-relaxed"
+              aria-label="备注内容"
+              placeholder="写点什么：这个项目是做什么的、下一步做什么、为什么先放下…"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onBlur={() => {
+                if (noteText === savedRef.current) return
+                savedRef.current = noteText
+                setNoteState('saving')
+                void window.hub?.nodes
+                  .setNote(node.id, noteText)
+                  .then(() => setNoteState('saved'))
+                  .catch(() => setNoteState('idle'))
+              }}
+            />
+          </section>
+        ) : null}
 
         {/* --- actions ----------------------------------------------------- */}
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             className="btn btn-primary"
-            disabled={isVirtualGroup || live.path_missing === 1}
-            title={isVirtualGroup ? '分组没有对应的磁盘目录' : '在系统文件管理器中打开'}
+            disabled={!live.path || live.path_missing === 1}
+            title={!live.path ? '该节点没有对应的磁盘目录' : '在系统文件管理器中打开'}
             onClick={() => {
               void window.hub?.shell
                 .openFolder(node.id)
@@ -331,6 +417,15 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
               新建子分组
             </button>
           ) : null}
+          <button
+            type="button"
+            className="btn"
+            title="在这个节点下挂一条备注"
+            onClick={addChildNote}
+          >
+            <StickyNote size={14} aria-hidden />
+            添加备注
+          </button>
           <button type="button" className="btn btn-ghost" onClick={() => openDialog('stats', node.id)}>
             <BarChart3 size={14} aria-hidden />
             统计

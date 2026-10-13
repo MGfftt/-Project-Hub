@@ -307,6 +307,17 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return id
   })
 
+  handle(CH.nodes.createNote, (parentId: number | null, text?: string) => {
+    const id = repo.createNote(parentId === null ? null : Number(parentId), String(text ?? '').slice(0, 4000))
+    ctx.broadcast(CH.broadcast.treeUpdated, null)
+    return id
+  })
+
+  handle(CH.nodes.setNote, (id: number, text: string) => {
+    repo.setNoteText(Number(id), String(text ?? '').slice(0, 4000))
+    ctx.broadcast(CH.broadcast.treeUpdated, null)
+  })
+
   handle(CH.nodes.remove, (id: number) => {
     repo.deleteNode(Number(id))
     ctx.broadcast(CH.broadcast.treeUpdated, null)

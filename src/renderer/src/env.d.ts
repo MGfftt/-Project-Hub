@@ -79,6 +79,8 @@ export interface HubApi {
     update(id: number, patch: NodePatch): Promise<void>
     move(id: number, parentId: number | null, index: number): Promise<void>
     createGroup(name: string, parentId: number | null): Promise<number>
+    createNote(parentId: number | null, text?: string): Promise<number>
+    setNote(id: number, text: string): Promise<void>
     remove(id: number): Promise<void>
     detail(id: number): Promise<NodeDetail | null>
     stats(nodeId: number): Promise<NodeStats>

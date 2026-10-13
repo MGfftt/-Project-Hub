@@ -197,7 +197,13 @@ project-hub/
 
 **移除是真的移除**：右键「移除」或按 `Delete` 之后，程序会记住这个路径，下一次扫描不会再从磁盘把它扫回来，它和它下面的子目录都会一直保持移出状态——直到你主动删掉根目录再重新添加。磁盘上的文件不会被做任何改动。
 
-添加根目录时通常会弹出系统的文件夹选择窗口，但**不是必须用它**：展开左下角的「根目录管理」，点「手动输入路径…」，直接把绝对路径（例如 `C:\Users\你\Desktop\项目`）粘进去按「添加」即可。系统对话框打不开的情况下（受限的 Windows 会话）这条路照样可用。
+添加根目录时通常会弹出系统的文件夹选择窗口，但**不是必须用它**：展开左下角的「根目录管理」，点「手动输入路径…」，直接把绝对路径（例如 `C:\Users\你\Desktop\项目`）粘贴进去按「添加」即可。系统对话框打不开的情况下（受限的 Windows 会话）这条路照样可用。
+
+**把项目拖进分组**：分组是虚拟节点（没有磁盘目录）。直接按住一个项目或目录拖到分组**卡片/行本身**上，松手就归入该分组——空分组同样可以接收，不需要先在分组里建子分组。分组只改变它在树里的位置，不会移动磁盘上的文件；下一次扫描也不会把节点挪回原位。
+
+**备注**：全景图右上角的「添加备注」会给当前选中的节点挂一条备注（概览页里也有这个按钮）。备注是一条不指向磁盘的虚拟节点，正文保存在本地数据库里，在概览页的「备注内容」框里直接写，改完自动保存。备注可以挂在任何项目、分组或目录下面，用来记项目用途、待办、为什么先放下之类的事情。
+
+> 如果升级之前把一个项目拖进过分组，升级后可能会看到同一个项目出现两次（旧版本会把它的所属根目录清空，扫描时就当作新文件夹又建了一条）。现在删除是持久的，删掉多余的那一条即可，剩下的那条保持在原来的分组里。
 
 全部数据与设置都在 `%APPDATA%\project-hub\`。
 
@@ -383,6 +389,12 @@ When you add a root folder, **a plain folder is a project in its own right** —
 **Removing a node sticks.** 移除 (right-click, or `Delete`) drops the node and remembers the path, so the next scan does not walk the disk and add it back — the folder and everything under it stay out until you deliberately remove the root and add it again. Nothing on disk is ever deleted.
 
 Adding a root normally opens the system folder dialog, but you never *need* it: open **根目录管理** at the bottom of the tree column and use **手动输入路径…** to paste an absolute folder path (for example `C:\Users\你\Desktop\项目`) and press 添加. This also covers the locked-down-session case where the native dialog does not appear — the dialog is a Windows feature, pasting a path is not.
+
+**Dragging a project into a group.** A group is a virtual node with no folder on disk. Pick up a project or a folder and drop it **onto the group row or card itself** — an empty group accepts the drop too, with no need to create a sub-group first. A group changes where the node sits in the tree; it never moves anything on disk, and the next scan does not put the node back where the disk says it belongs.
+
+**Notes.** 添加备注 (top right of the map, and also a button on every overview page) attaches a note to the selected node. A note is a virtual node that points at nothing on disk; its body is stored in the local database and edited in the 备注内容 box on the overview page, which auto-saves as you type. Notes hang off projects, groups or folders and are the place for what a project is for, what comes next, or why it was set aside.
+
+> If you dragged a project into a group *before* this version, you may see that project twice after upgrading: the old code cleared the node's owning root, so the scanner saw the same folder as new and inserted a second row. Deleting is permanent now — remove the extra row and the remaining one stays in its group.
 
 All data and settings live in `%APPDATA%\project-hub\`.
 

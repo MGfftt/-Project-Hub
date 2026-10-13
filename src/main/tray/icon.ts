@@ -8,6 +8,7 @@
  */
 
 import { nativeImage, type NativeImage } from 'electron'
+import { renderAppIconPng, renderTrayIconPng } from '../icon/render'
 
 const ACCENT = '#3b82f6'
 const CORE_DARK = '#e8eef8'
@@ -38,18 +39,28 @@ export function trayIconSvg(dark = false): string {
 /**
  * Build the tray `NativeImage`.
  *
- * `createFromDataURL` is synchronous and cannot fail on a malformed string (it
- * yields an empty image), so the size is asserted and a 1×1 fallback keeps
- * `new Tray(...)` from throwing on an exotic platform.
+ * `nativeImage.createFromDataURL` decodes PNG only — Electron hands the payload
+ * to `gfx::Image::CreateFrom1xPNGBytes` and ignores the declared MIME type — so
+ * feeding it the SVG above produced an empty image and the tray showed a blank
+ * square. The mark is rasterised here instead (see `icon/render.ts`).
+ *
+ * A 2× representation is attached so the icon stays sharp on a HiDPI tray; if
+ * the platform rejects it the 16 px buffer on its own is still correct.
  */
 export function createTrayIcon(dark = false): NativeImage {
   try {
-    const image = nativeImage.createFromDataURL(
-      `data:image/svg+xml;base64,${Buffer.from(trayIconSvg(dark), 'utf8').toString('base64')}`
-    )
+    const image = nativeImage.createFromBuffer(renderTrayIconPng(16, dark))
     if (!image.isEmpty()) {
-      const sized = image.resize({ width: 16, height: 16 })
-      if (!sized.isEmpty()) return sized
+      try {
+        image.addRepresentation({
+          scaleFactor: 2,
+          width: 32,
+          height: 32,
+          buffer: renderTrayIconPng(32, dark)
+        })
+      } catch {
+        /* a single representation is enough */
+      }
       return image
     }
   } catch {
@@ -58,6 +69,30 @@ export function createTrayIcon(dark = false): NativeImage {
   return nativeImage.createFromDataURL(
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
   )
+}
+
+/**
+ * The app icon as an image the window can carry.
+ *
+ * Windows takes the taskbar and Task Manager icons from the executable, which
+ * the packer stamps from `build/icon.ico`; this covers development, where the
+ * running executable is Electron's own.
+ */
+export function createAppIcon(): NativeImage {
+  try {
+    const image = nativeImage.createFromBuffer(renderAppIconPng(256))
+    if (!image.isEmpty()) {
+      try {
+        image.addRepresentation({ scaleFactor: 2, width: 512, height: 512, buffer: renderAppIconPng(512) })
+      } catch {
+        /* a single representation is enough */
+      }
+      return image
+    }
+  } catch {
+    /* fall through */
+  }
+  return nativeImage.createEmpty()
 }
 
 /**
