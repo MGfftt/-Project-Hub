@@ -223,7 +223,6 @@ export function ProjectMap(): JSX.Element {
     // The expander and the +N pill are controls; a drag must not start on them.
     if ((e.target as HTMLElement).closest('[data-map-nodrag]')) return
     pendingDrag.current = { id: node.id, x: e.clientX, y: e.clientY }
-    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   const onCardPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
@@ -233,6 +232,14 @@ export function ProjectMap(): JSX.Element {
       const travel = Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y)
       if (travel <= DRAG_START_PX) return
       liveDrag.current = { id: start.id, over: null }
+      /* §9.10 — capture only now that this is really a drag. Capturing on
+       * pointerdown retargets the compatibility `mousedown` to the card, and
+       * the browser picks the `click` target as the common ancestor of
+       * mousedown and mouseup: the click then lands on the card instead of the
+       * label button inside it, where the selection handler lives, so a plain
+       * click would silently stop opening the node. 4px is small enough that
+       * the pointer is still over the card when capture is taken. */
+      e.currentTarget.setPointerCapture(e.pointerId)
     }
     const over = dropTargetAt(e.clientX, e.clientY, start.id)
     liveDrag.current.over = over
@@ -410,6 +417,14 @@ export function ProjectMap(): JSX.Element {
                   onPointerMove={onCardPointerMove}
                   onPointerUp={onCardPointerUp}
                   onPointerCancel={onCardPointerUp}
+                  /* §9.10 — the whole card selects, not just the label button
+                   * inside it. The expander and the +N pill stop propagation,
+                   * and a drag that ended here is filtered by justDragged, so
+                   * this only ever fires for a genuine click. */
+                  onClick={() => {
+                    if (justDragged.current) return
+                    onCardClick(node)
+                  }}
                   style={{
                     left: x + PAD,
                     top: y + PAD,
@@ -463,11 +478,6 @@ export function ProjectMap(): JSX.Element {
                         ? `备注：${String((node.meta?.text as string) ?? '') || '（空白）'}`
                         : `${label}（虚拟分组）`)
                     }
-                    onClick={() => {
-                      /* A drag that ended on its own card must not also select. */
-                      if (justDragged.current) return
-                      onCardClick(node)
-                    }}
                   >
                     <span
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
