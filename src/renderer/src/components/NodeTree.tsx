@@ -37,6 +37,12 @@ export interface NodeTreeProps {
 /** §8.1 — delayed just past the double-click window so a dblclick never opens. */
 const CLICK_OPEN_DELAY_MS = 260
 
+/** §7.8 — the outer fraction of a *group* row that still counts as "insert
+ *  beside it" instead of "insert into it". react-arborist's own band is the
+ *  outer quarter of the row (see the group-drop note inside the component);
+ *  this shrinks it to the hairline at the row's very edge. */
+const GROUP_EDGE_BAND = 0.08
+
 function useElementSize<T extends HTMLElement>(): [
   React.RefObject<T>,
   { width: number; height: number }
@@ -211,6 +217,96 @@ export function NodeTree({
       syncing.current = false
     }
   }, [arboristOpen, nodes])
+
+  /* -------------------------------------------------------------------------
+   * Group drops (§7.8) — "dragging a project onto a group does not always add
+   * it to the group".
+   *
+   * react-arborist decides "drop inside" from the pointer's y inside the row
+   * it hovers, and only the *middle half* of an internal row means that: its
+   * dnd/compute-drop.js measures `pad = height / 4`, calls the outer quarters
+   * `atTop` / `atBottom`, and returns those as a sibling insert. On a 32px row
+   * that leaves 16px of nestable height, so a user aiming at a group row and
+   * landing a few pixels high gets the node dropped *beside* the group — the
+   * row highlights as a line instead of a target. `pad` is hardcoded in the
+   * library, so the band has to be corrected from the outside.
+   *
+   * This capture-phase listener intercepts dragover/drop over an internal row
+   * inside that band and re-dispatches the very same DragEvent on the same row
+   * aimed at the row's centre. react-dnd's HTML5 backend resolves the drop
+   * target from `event.target` and takes clientOffset straight off the event,
+   * so the replay reaches react-arborist's own maths — and therefore `onMove` —
+   * exactly as a middle-of-the-row drop would. Both events need it: the backend
+   * hovers again on every dragover *and* once more inside its own drop handler,
+   * so intercepting only one still lets the drop decide from the real y.
+   *
+   * Left alone are all non-group rows — a project, a note, a plain folder and
+   * a folder that holds subfolders all keep the library's top-half / bottom-half
+   * split, which is what makes deliberate insertion between two rows possible.
+   * A group row keeps the same split in the hairline at its very edge, so a node
+   * can still be dropped directly above or below a group on purpose.
+   * ---------------------------------------------------------------------- */
+  const replayingDrop = useRef(false)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    /** The element react-arborist connects the drop target to — the library's
+     *  own `role="treeitem"` row, which is also what it measures y against. */
+    function rowElement(target: EventTarget | null): HTMLElement | null {
+      return target instanceof Element ? target.closest<HTMLElement>('[role="treeitem"]') : null
+    }
+
+    function handleGroupDrag(event: DragEvent): void {
+      /* Our own replay arrives here too — let it through untouched. */
+      if (replayingDrop.current) return
+      const row = rowElement(event.target)
+      if (!row) return
+      const id = row.querySelector('[data-node-id]')?.getAttribute('data-node-id')
+      const node = id == null ? null : treeRef.current?.get(id)
+      /* Only a group row is a drop-into target here. `isInternal` on its own
+       * would also catch a folder that happens to hold subfolders (and a root
+       * row), and those keep the library's split — a node must still be
+       * insertable deliberately above or below them, and only a group is the
+       * virtual container this report is about. */
+      if (!node?.isInternal || node.data.kind !== 'group') return
+      const rect = row.getBoundingClientRect()
+      if (rect.height <= 0) return
+      const y = event.clientY - rect.top
+      const edge = rect.height * GROUP_EDGE_BAND
+      if (y <= edge || y >= rect.height - edge) return
+
+      /* Hand the event to the library's own listeners with a corrected y. The
+       * original must still have its default prevented, otherwise the browser
+       * never lets go of the drop at all. */
+      event.preventDefault()
+      event.stopPropagation()
+      replayingDrop.current = true
+      try {
+        row.dispatchEvent(
+          new DragEvent(event.type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: event.dataTransfer,
+            clientX: event.clientX,
+            clientY: rect.top + rect.height / 2
+          })
+        )
+      } finally {
+        replayingDrop.current = false
+      }
+    }
+
+    container.addEventListener('dragover', handleGroupDrag, true)
+    container.addEventListener('drop', handleGroupDrag, true)
+    return () => {
+      container.removeEventListener('dragover', handleGroupDrag, true)
+      container.removeEventListener('drop', handleGroupDrag, true)
+    }
+    /* `error` swaps this container for the failure notice, so the listener has
+     * to move to the element that replaces it. */
+  }, [error])
 
   /** Drops are only legal when the target is not inside the dragged subtree. */
   const isDescendant = useCallback(

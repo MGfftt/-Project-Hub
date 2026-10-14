@@ -67,6 +67,13 @@ const LANE_HEIGHT = 32
 const LIST_WIDTH = 340
 const DOT = 6
 const DOT_HOVER = 10
+/**
+ * A dot's centre must sit this far from its neighbour's — two 6px dots at 8px
+ * are 2px apart. Below it the bucket collapses into a numbered cluster marker,
+ * so the rule holds at every zoom and lane width instead of only where the
+ * fixed `BUCKET_PX` happens to be wide enough.
+ */
+const DOT_MIN_STEP = DOT + 2
 const CLUSTER_THRESHOLD = 10
 const MAX_RENDERED = 1500
 const MAX_FILES_SHOWN = 20
@@ -78,6 +85,25 @@ const RANGE_PRESETS: ReadonlyArray<{ labelKey: string; days: number }> = [
   { labelKey: 'map.range.last90', days: 90 },
   { labelKey: 'map.range.all', days: 0 }
 ]
+
+/* ------------------------------------------------------------------ */
+/* Geometry                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Per-bucket width at the current lane width. `BUCKET_PX` is only a floor:
+ * 30 month buckets at 40px are 1200px of content in a ~430px lane, so the
+ * axis (and every dot on it) squeezed a whole month into the leftmost third
+ * of the lane. The buckets now stretch into whatever room the lane has, and
+ * the horizontal scroll (unchanged) takes over once even that is not enough.
+ *
+ * Every consumer — axis, `slotOf`, dot placement, cluster centre — reads this
+ * one value, so the axis and the dots can never disagree.
+ */
+function effectiveBucketPx(available: number, bucketCount: number, zoom: Zoom): number {
+  if (bucketCount <= 0) return BUCKET_PX[zoom]
+  return Math.max(BUCKET_PX[zoom], available / bucketCount)
+}
 
 /* ------------------------------------------------------------------ */
 /* Local-time bucket helpers (align with DayCount.day = YYYY-MM-DD)     */
@@ -318,13 +344,15 @@ const ClusterMarker = memo(function ClusterMarker({
 const AxisStrip = memo(function AxisStrip({
   buckets,
   zoom,
+  /** The effective bucket width, computed once for the axis and the dots. */
+  px,
   width
 }: {
   buckets: number[]
   zoom: Zoom
+  px: number
   width: number
 }) {
-  const px = BUCKET_PX[zoom]
   return (
     <div
       className="flex h-8 border-b border-[var(--border)] bg-[var(--panel)]"
@@ -497,6 +525,17 @@ export default function Timeline() {
   const laneRefs = useRef(new Map<number, HTMLDivElement>())
 
   const nodeMap = useMemo(() => indexNodes(treeNodes), [treeNodes])
+
+  /* --- how much room does the lane column actually have? ------------ */
+  /* Same measurement pattern as `Heatmap`: read `clientWidth` once, then let
+     a ResizeObserver keep it honest while the panel or the event list resizes.
+     The observer watches the scroll container, not the lane column itself —
+     the column's own width *is* what we set from this measurement, so watching
+     it would feed its own output back in. `clientWidth` minus the sticky
+     LANE_LABEL_PX strip is the lane area the buckets have to fill. */
+  const [scrollWidth, setScrollWidth] = useState(0)
+  const laneAreaWidth = Math.max(scrollWidth - LANE_LABEL_PX, BUCKET_PX.month)
+
   const labelOf = useCallback(
     (nodeId: number): string => nodeLabel(nodeMap.get(nodeId), nodeId),
     [nodeMap]
@@ -525,9 +564,10 @@ export default function Timeline() {
   )
 
   /* --- axis buckets ------------------------------------------------- */
-  const { buckets, contentWidth } = useMemo(() => {
-    if (shown.length === 0) return { buckets: [] as number[], contentWidth: 1 }
-    const px = BUCKET_PX[zoom]
+  const { buckets, effectivePx, contentWidth } = useMemo(() => {
+    if (shown.length === 0) {
+      return { buckets: [] as number[], effectivePx: BUCKET_PX[zoom], contentWidth: 1 }
+    }
     const out: number[] = []
     const last = bucketStart(shown[shown.length - 1].occurred_at, zoom)
     let cursor = bucketStart(shown[0].occurred_at, zoom)
@@ -535,13 +575,14 @@ export default function Timeline() {
       out.push(cursor)
       cursor = nextBucket(cursor, zoom)
     }
-    return { buckets: out, contentWidth: Math.max(out.length * px, px) }
-  }, [shown, zoom])
+    const px = effectiveBucketPx(laneAreaWidth, out.length, zoom)
+    return { buckets: out, effectivePx: px, contentWidth: out.length * px }
+  }, [shown, zoom, laneAreaWidth])
 
   /* --- lanes + clustering ------------------------------------------- */
   const lanes = useMemo<Lane[]>(() => {
     if (shown.length === 0 || buckets.length === 0) return []
-    const px = BUCKET_PX[zoom]
+    const px = effectivePx
     const slotOf = new Map<number, number>()
     buckets.forEach((b, i) => slotOf.set(b, i * px))
 
@@ -566,7 +607,12 @@ export default function Timeline() {
       const dots: Dot[] = []
       for (const [bucket, evs] of groups) {
         const slot = slotOf.get(bucket) ?? 0
-        if (evs.length > CLUSTER_THRESHOLD) {
+        /* Fanning N dots across a slot leaves neighbours `px / (N + 1)` apart,
+           so that — not a fixed count — is what decides dots versus a cluster.
+           A wide lane clears many events; a narrow one or a busy commit day
+           falls back to the numbered marker instead of overlapping dots. */
+        const maxDots = Math.floor(px / DOT_MIN_STEP) - 1
+        if (evs.length > CLUSTER_THRESHOLD || evs.length > maxDots) {
           clusters.push({
             key: `c-${nodeId}-${bucket}`,
             x: slot + px / 2,
@@ -593,7 +639,26 @@ export default function Timeline() {
       return bt - at
     })
     return out
-  }, [shown, buckets, zoom, nodeMap])
+  }, [shown, buckets, effectivePx, zoom, nodeMap])
+
+  /* --- measure the lane area once the scroll container exists ------- */
+  /* The dependency is load-bearing: while there are no visible lanes the scroll
+     container is not rendered at all, so a `[]`-deps effect bails out on a null
+     ref and never attaches — the lane then stays clamped to its `BUCKET_PX`
+     floor (one 40px month bucket) no matter how wide the panel becomes. This
+     sits below `lanes` so that dependency is actually in scope, and
+     re-subscribing when the container appears keeps the observer bound to the
+     element that is on screen. */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const measure = (): void => setScrollWidth(el.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [lanes.length > 0])
 
   /* --- selection + the list beside the lanes ------------------------ */
   const selected = useMemo(
@@ -833,7 +898,12 @@ export default function Timeline() {
                 {/* right column: the axis stays pinned while lanes scroll under it */}
                 <div className="shrink-0" style={{ width: contentWidth }}>
                   <div className="sticky top-0 z-10">
-                    <AxisStrip buckets={buckets} zoom={zoom} width={contentWidth} />
+                    <AxisStrip
+                      buckets={buckets}
+                      zoom={zoom}
+                      px={effectivePx}
+                      width={contentWidth}
+                    />
                   </div>
                   {lanes.map((lane) => (
                     <div

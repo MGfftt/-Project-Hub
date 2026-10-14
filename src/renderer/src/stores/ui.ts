@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { BackgroundStatus, TrayState } from '@shared/types'
-import { applyResolvedTheme, type ThemePref } from '@renderer/lib/theme'
+import { applyResolvedTheme, isThemePref, type ThemePref } from '@renderer/lib/theme'
 
 /* ---------------------------------------------------------------------------
  * ui.ts — view state, selection, panel geometry, dialogs and verbosity.
@@ -173,8 +173,11 @@ export const useUi = create<UiState>()((set, get) => ({
     try {
       const all = await hub.settings.all()
       const themeRaw = all.theme ?? all[('theme' as string) as keyof typeof all]
-      const theme: ThemePref =
-        themeRaw === 'light' || themeRaw === 'dark' || themeRaw === 'system' ? themeRaw : 'system'
+      /* §9.11 — ask `isThemePref` rather than repeating the list of valid
+         values. The copy of it that used to live here silently rewrote every
+         theme it had not heard of back to `system`, which is why the frosted
+         glass option applied at boot and then undid itself a moment later. */
+      const theme: ThemePref = isThemePref(themeRaw) ? themeRaw : 'system'
       const left = Number(all[PANEL_SETTING_KEYS.leftWidth])
       const right = Number(all[PANEL_SETTING_KEYS.rightWidth])
       set({

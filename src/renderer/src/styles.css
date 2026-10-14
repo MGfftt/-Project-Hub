@@ -82,6 +82,53 @@
 }
 
 /* ===========================================================================
+ * Frosted glass + wallpaper (§9.11)
+ *
+ * `data-glass` and `data-wallpaper` are set on <html> by `lib/theme.ts` and
+ * `lib/wallpaper.ts`. Both only swap the surface tokens for translucent ones
+ * and raise `--glass-blur`; the actual blurring is done by `.glass-panel`,
+ * which the three columns and the status bar carry. A wallpaper implies glass,
+ * because an opaque surface in front of a picture is exactly the bug this
+ * section exists to fix.
+ * ======================================================================== */
+
+:root[data-glass='1'],
+:root[data-wallpaper='1'] {
+  --glass-blur: 16px;
+  --bg: rgba(255, 255, 255, 0.6);
+  --panel: rgba(255, 255, 255, 0.44);
+  --border: rgba(15, 23, 42, 0.12);
+  --hover: rgba(15, 23, 42, 0.06);
+  --selected: rgba(59, 130, 246, 0.22);
+}
+
+:root[data-glass='1'].dark,
+:root[data-wallpaper='1'].dark {
+  --bg: rgba(24, 24, 27, 0.6);
+  --panel: rgba(31, 31, 35, 0.5);
+  --border: rgba(255, 255, 255, 0.12);
+  --hover: rgba(255, 255, 255, 0.07);
+  --selected: rgba(59, 130, 246, 0.3);
+}
+
+:root[data-glass='1'] {
+  --glass-blur: 22px;
+}
+
+.glass-panel {
+  backdrop-filter: blur(var(--glass-blur, 0px)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0px)) saturate(1.25);
+}
+
+/* Glass with no picture behind it would blur nothing at all, so it gets an
+   accent wash to work with instead. */
+:root[data-glass='1']:not([data-wallpaper='1']) body {
+  background-image:
+    radial-gradient(120% 90% at 12% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%),
+    radial-gradient(100% 80% at 100% 100%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 58%);
+}
+
+/* ===========================================================================
  * Base
  * ======================================================================== */
 
@@ -95,6 +142,14 @@
   body {
     margin: 0;
     background-color: var(--bg);
+    /* §9.11 — the chosen picture is painted by the body itself, so nothing has
+       to reserve a stacking layer for it. `--wallpaper` is set inline on <html>
+       by `lib/wallpaper.ts` and is absent when no picture is chosen. */
+    background-image: var(--wallpaper, none);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     color: var(--text);
     font-family:
       Inter, system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;

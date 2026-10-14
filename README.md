@@ -26,7 +26,7 @@ Project Hub 把**归属关系**和**元数据**从文件系统里独立出来：
 
 | 编号 | 需求 | 实现方式 | 验证 |
 | --- | --- | --- | --- |
-| **R1** | 图形化展示，清晰可读 | Tailwind + CSS 变量主题，正文对比度 ≥ 4.5:1，次要信息 ≥ 3:1 且 ≥ 12px；行高 32px（紧凑 26px）；深浅色主题 | `src/renderer/src/styles.css`、`src/renderer/src/components/*` |
+| **R1** | 图形化展示，清晰可读 | Tailwind + CSS 变量主题，正文对比度 ≥ 4.5:1，次要信息 ≥ 3:1 且 ≥ 12px；行高 32px（紧凑 26px）；深浅色 / 毛玻璃主题，可换背景图片 | `src/renderer/src/styles.css`、`src/renderer/src/components/*` |
 | **R2** | 单击树节点打开文件夹 | 单击 = 选中 + `shell.openFolder`；虚拟分组与路径缺失的节点只选中不打开；`clickToOpen` 设置可关闭单击打开 | `src/renderer/src/components/NodeTree.tsx`、`src/main/ipc/main.ts` |
 | **R3** | 右键节点 → 查看改动 / 属性 / 标注 | 冻结顺序的右键菜单；查看改动跳到时间线并锁定该节点子树；属性弹窗分「基本/磁盘/Git/改动/标注」 | `src/renderer/src/components/ContextMenu.tsx`、`dialogs/StatsDialog.tsx` |
 | **R4** | 文件夹程序内改名 + 改图标 | 只写 `nodes.display_name` / `icon_type` / `icon_value`，**从不重命名磁盘目录**；别名上限 64 字符；图标支持自动/内置/Emoji/导入图片四条来源 | `src/main/ipc/main.ts`、`src/renderer/src/components/dialogs/IconPicker.tsx` |
@@ -206,6 +206,8 @@ project-hub/
 
 「改动时间线」的范围跟着选中项走：选中一个项目就只看它的改动，选中一个分组或文件夹就看它整棵子树里所有节点的改动，什么都没选中时就是整个工作区。
 
+时间线会横向铺满整个内容区：改动少的时候每个刻度自己撑宽（默认「最近 30 天 + 月」时一格约 218px，而不是原来固定的 40px 把内容挤在左边 42% 的地方），只有内容真的比窗口宽才出现横向滚动（例如「最近 90 天 + 日」）。同一格里堆了多个提交时，只要彼此还能留出 8px 就逐个画点，挤不下就合并成一个带数字的圆点（悬停显示「N 次改动」）——所以点与点不会再粘成一条。
+
 ![改动时间线：按天铺开的 Git 提交记录](docs/screenshots/timeline-zh.png)
 
 *改动时间线——每一条是一次提交，按天排开，可以按节点过滤。*
@@ -216,7 +218,7 @@ project-hub/
 
 添加根目录时通常会弹出系统的文件夹选择窗口，但**不是必须用它**：展开左下角的「根目录管理」，点「手动输入路径…」，直接把绝对路径（例如 `C:\Users\你\Desktop\项目`）粘贴进去按「添加」即可。系统对话框打不开的情况下（受限的 Windows 会话）这条路照样可用。
 
-**把项目拖进分组**：分组是虚拟节点（没有磁盘目录）。直接按住一个项目或目录拖到分组**卡片/行本身**上，松手就归入该分组——空分组同样可以接收，不需要先在分组里建子分组。分组只改变它在树里的位置，不会移动磁盘上的文件；下一次扫描也不会把节点挪回原位。
+**把项目拖进分组**：分组是虚拟节点（没有磁盘目录）。直接按住一个项目或目录拖到分组**卡片/行本身**上，松手就归入该分组——空分组同样可以接收，不需要先在分组里建子分组。行上的**任意位置**都算「放进分组」，整行高度都收（以前只有中间的 16px 算数，往偏上一点松手就变成「插到前面」，看起来就像没生效）；只有在分组行最上/最下缘那 2.5px 松手才是「插到它前面/后面」。分组只改变它在树里的位置，不会移动磁盘上的文件；下一次扫描也不会把节点挪回原位。
 
 **备注**：全景图右上角的「添加备注」会给当前选中的节点挂一条备注（概览页里也有这个按钮）。备注是一条不指向磁盘的虚拟节点，正文保存在本地数据库里，在概览页的「备注内容」框里直接写，改完自动保存。备注可以挂在任何项目、分组或目录下面，用来记项目用途、待办、为什么先放下之类的事情。
 
@@ -238,6 +240,8 @@ project-hub/
 
 *设置——「语言」就在「外观」一组里，和主题、背景图片放在一起。*
 
+**主题与背景图片**：「设置 → 外观」里有四个主题：浅色、深色、跟随系统、**毛玻璃**。毛玻璃和「跟随系统」一样跟随系统的深浅色，另外把三个栏位、状态栏和对话框变成半透明，用 `backdrop-filter` 虚化背后的内容。**背景图片**选一张图片（也可以「清除」）之后**立刻生效**：图片铺满窗口、滚动时固定在原位，三个栏位变成半透明，图片从后面透出来——以前的版本只会把图片复制进数据目录并在设置里显示个文件名，界面上什么也不会变。没有选图片时，毛玻璃会用强调色在底下铺一层渐变，免得虚化的是一片纯色。图片只允许 `hub-media://` 协议，也就是程序自己复制到 `%APPDATA%\project-hub\backgrounds\` 的那一份，不会去引用你磁盘上的原始路径。
+
 全部数据与设置都在 `%APPDATA%\project-hub\`。
 
 ---
@@ -256,7 +260,7 @@ These are non-negotiable acceptance conditions (R1–R6 in the project book). Fa
 
 | ID | Requirement | How it is met | Where |
 | --- | --- | --- | --- |
-| **R1** | Graphical display, clearly legible | Tailwind + CSS-variable theming, body contrast ≥ 4.5:1, secondary info ≥ 3:1 and ≥ 12px, 32px rows (26px compact), light and dark themes | `src/renderer/src/styles.css`, `src/renderer/src/components/*` |
+| **R1** | Graphical display, clearly legible | Tailwind + CSS-variable theming, body contrast ≥ 4.5:1, secondary info ≥ 3:1 and ≥ 12px, 32px rows (26px compact), light, dark and frosted-glass themes, plus a replaceable background picture | `src/renderer/src/styles.css`, `src/renderer/src/components/*` |
 | **R2** | Single click on a tree node opens its folder | Click = select + `shell.openFolder`; virtual groups and missing paths select only; the `clickToOpen` setting can turn open-on-click off | `src/renderer/src/components/NodeTree.tsx`, `src/main/ipc/main.ts` |
 | **R3** | Right-click a node → view changes / properties / annotation | A context menu with a frozen item order; "view changes" switches to the timeline and locks the filter to that node's subtree; properties opens a dialog grouped **Basics / Disk / Git / Changes / Annotations** | `src/renderer/src/components/ContextMenu.tsx`, `dialogs/StatsDialog.tsx` |
 | **R4** | In-app rename + icon change for folders | Only `nodes.display_name` / `icon_type` / `icon_value` are written — the disk directory is **never** renamed. Aliases cap at 64 characters; icons come from auto, built-in, emoji or an imported image | `src/main/ipc/main.ts`, `src/renderer/src/components/dialogs/IconPicker.tsx` |
@@ -430,13 +434,15 @@ The window itself is two columns: **tree on the left, content in the middle**. I
 
 The timeline's scope follows the selection: pick one project and you see that project's changes, pick a group or a folder and you see every node in its subtree, and with nothing selected you see the entire workspace.
 
+The timeline fills the content area sideways: with few changes each tick widens to take up the slack (with the default *last 30 days* + *month* a bucket is about 218px rather than the fixed 40px that squeezed everything into the leftmost 42%), and horizontal scrolling only appears when the content is genuinely wider than the window (for example *last 90 days* + *day*). When a bucket holds several commits it draws one dot per event as long as they can stay 8px apart, and collapses them into a single numbered marker when they cannot (hovering it reads "N changes") — so dots no longer merge into a smear.
+
 When you add a root folder, **a plain folder is a project in its own right** — it needs no `.git` or `package.json` marker first. Such a folder is still walked into, so it can hold other projects; if you later run `git init` inside it, the next scan or refresh picks that up and reclassifies it, with no need to re-add the node.
 
 **Removing a node sticks.** **Remove** (right-click, or `Delete`) drops the node and remembers the path, so the next scan does not walk the disk and add it back — the folder and everything under it stay out until you deliberately remove the root and add it again. Nothing on disk is ever deleted.
 
 Adding a root normally opens the system folder dialog, but you never *need* it: open **Root folders** at the bottom of the tree column and use **Enter a path manually…** to paste an absolute folder path (for example `C:\Users\you\Desktop\project`) and press **Add**. This also covers the locked-down-session case where the native dialog does not appear — the dialog is a Windows feature, pasting a path is not.
 
-**Dragging a project into a group.** A group is a virtual node with no folder on disk. Pick up a project or a folder and drop it **onto the group row or card itself** — an empty group accepts the drop too, with no need to create a sub-group first. A group changes where the node sits in the tree; it never moves anything on disk, and the next scan does not put the node back where the disk says it belongs.
+**Dragging a project into a group.** A group is a virtual node with no folder on disk. Pick up a project or a folder and drop it **onto the group row or card itself** — an empty group accepts the drop too, with no need to create a sub-group first. Anywhere on the row counts as *into the group*: the whole height accepts the drop (previously only the middle 16px did, so releasing slightly high became "insert before this row" and looked as if nothing had happened); only the outermost 2.5px at the very top or bottom of a group row still means *insert before/after*. A group changes where the node sits in the tree; it never moves anything on disk, and the next scan does not put the node back where the disk says it belongs.
 
 **Notes.** **Add a note** (top right of the map, and also a button on every overview page) attaches a note to the selected node. A note is a virtual node that points at nothing on disk; its body is stored in the local database and edited in the **Note body** box on the overview page, which auto-saves as you type. Notes hang off projects, groups or folders and are the place for what a project is for, what comes next, or why it was set aside.
 
@@ -453,6 +459,8 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 ![The settings dialog: theme, compact mode, background image, language, interaction and maintenance](docs/screenshots/settings-en.png)
 
 *Settings — Language sits in the Appearance group, next to the theme and the background image.*
+
+**Theme and background picture.** *Settings → Appearance* offers four themes: light, dark, follow the system, and **frosted glass**. Frosted glass follows the system's light/dark choice exactly like *follow the system*, and additionally turns the three columns, the status bar and the dialogs translucent, blurring whatever sits behind them with `backdrop-filter`. **Background image** takes effect **the moment you pick a picture** (and *Clear* removes it): the picture fills the window and stays put while the content scrolls, the columns turn translucent, and the picture shows through — in earlier versions the file was only copied into the data directory and named in the dialog, while nothing on screen changed. With frosted glass and no picture chosen, a gradient wash mixed from the accent colour is painted underneath, so that there is something to blur. Only a `hub-media://` URL is accepted — the copy the app itself made under `%APPDATA%\project-hub\backgrounds\` — never the original path on your disk.
 
 All data and settings live in `%APPDATA%\project-hub\`.
 

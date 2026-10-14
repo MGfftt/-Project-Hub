@@ -439,5 +439,114 @@ The settings dialog had no entry point in the interface at all — only the `Ctr
 
 **Lesson.** A fixed pixel size for a component that lives in a user-resizable column is a latent bug with a long fuse: it looks correct on the machine it was written on and clips on someone else's window. Measure the container.
 
+---
+
+## D-029 · The renderer paints the background picture, and frosted glass is a fourth theme
+
+**Context.** Two complaints that turned out to share a cause. The first, "设置类型无法使用", was clarified on asking to mean the background image: `设置 → 外观 → 背景图片` copied the chosen file into `userData/backgrounds`, recorded it in `background.json` and displayed its file name — and nothing in the renderer ever read it back. Every other part of that feature already existed (`hub-media://` protocol handler, `toMediaUrl`, `img-src hub-media:` in the CSP, `anchor.paths.background` sandboxing, `settings.background.current()` returning a `url`), so the last link was the only one missing and picking a picture did nothing at all. The second request was for a 毛玻璃 (frosted glass) theme.
+
+**Decision.**
+
+1. **The renderer paints the picture, with a `localStorage` hint for the first frame.** `lib/wallpaper.ts` mirrors the `hub-media://` URL into `hub.wallpaper` and sets `--wallpaper` plus `data-wallpaper="1"` on `<html>`; `body` carries `background-image: var(--wallpaper, none)`, `background-size: cover`, `background-position: center`, `background-attachment: fixed`. `main.tsx` applies the hint synchronously and then corrects from `settings.background.current()`, exactly as the theme and the language already did. `BackgroundImage.url` had to be added to `env.d.ts` — the main process was returning it, untyped.
+2. **Only `hub-media://` may reach a CSS `url()`.** `isSafeWallpaperUrl` rejects anything else, and anything over 4kB; quotes and backslashes are stripped before interpolation.
+3. **Glass is a fourth theme value, not a second switch.** `ThemePref` gains `'glass'`. It resolves to light/dark exactly like `system` — so it follows the OS for text and borders — and additionally sets `data-glass="1"` on `<html>`. The tokens live in a separate `:root[data-glass='1']` layer stacked on top of either palette rather than duplicating both.
+4. **A wallpaper implies glass.** `:root[data-wallpaper='1']` takes the same translucent tokens and a 16px blur, because an opaque panel in front of a picture is precisely the bug being fixed. `data-glass` alone raises the blur to 22px.
+5. **Glass with no picture behind it gets an accent wash.** `:root[data-glass='1']:not([data-wallpaper='1']) body` paints two radial gradients mixed from `--accent`, since `backdrop-filter` over a flat colour blurs nothing at all.
+6. **The three columns, the status bar and the modal carry `.glass-panel`**, which is the only place `backdrop-filter` is declared.
+
+**Why not a transparency slider.** A slider is a continuous setting that has to be stored, clamped, migrated and explained, to express what is really a choice between two looks; a fourth radio in the row that already switches between 浅色 and 深色 costs one menu entry.
+
+**Evidence.** Two CDP probes against the built app, both 11/11.
+
+*Wallpaper*, with a picture seeded the way the main process leaves it: `--wallpaper` = `url("hub-media://local/…/backgrounds/bg.png")`, `body` `background-image` the same URL, `background-size cover`, `--panel rgba(255, 255, 255, 0.44)`, the tree `aside` computing `backdrop-filter: blur(16px) saturate(1.25)`; after clearing, `data-wallpaper` and `data-glass` are both gone and `body` paints `none`.
+
+*Glass*, driven through the real dialog — the radio group reads back `浅色 / 深色 / 跟随系统 / 毛玻璃` (plus `中文 / English` in the language group), and clicking 毛玻璃 gives `data-glass="1"`, `data-theme-pref="glass"`, `--panel rgba(255, 255, 255, 0.44)` and `blur(22px) saturate(1.25)`; a restart reproduces all of it from the settings table; switching back to `light` removes the attribute and returns `--panel` to `#f9fafb`.
+
+**Cost.** `backdrop-filter` on four surfaces is real GPU work, though only while a picture or glass is chosen. A `cover` background on `body` means a very large picture is decoded at full size; the store already copies rather than links the file, so the bytes are local.
+
+**Lesson.** The feature was undone by a **second copy of its own validity list**. `stores/ui.ts:hydrate()` repeated the literal set of accepted theme values and rewrote anything it had not heard of back to `system`, so the glass preference applied correctly at boot and was silently reverted a moment later by the store. `isThemePref` exists so that the list lives in exactly one place; a whitelist that answers "is this one of ours?" must be called, never re-spelled.
+
+---
+
+## D-030 · A group row accepts a drop over its whole height, not just its middle 16 pixels
+
+**Context.** Reported: dropping a project onto a group in the sidebar "有时候会无法添加" — at least sometimes the project would not go into the group. Reproduced with a root-level project and a virtual group: a drop released in the **top 15%** of the group's row left the project at the root instead of nesting it, while the same drop in the row's middle worked.
+
+**Root cause.** react-arborist decides "insert as a sibling" versus "drop inside" from row height alone. `node_modules/react-arborist/dist/main/dnd/compute-drop.js`: `measureHover` computes `const pad = height / 4; const inMiddle = y > pad && y < height - pad`, and `computeDrop` nests only `if (node && node.isInternal && hover.inMiddle)`. On a 32px row that makes the middle **16px** mean "inside" while the top and bottom **8px** mean "reorder". The quarter-height padding is hardcoded and no prop exposes it. This is also what made the report sound intermittent: a group is only droppable-into over half its height, so aiming at the label's left edge, or anywhere in the upper or lower quarter, is read as a reorder that looks like nothing happened.
+
+**Decision.**
+
+1. **Intercept and replay, rather than fork the library.** A capture-phase listener on the tree container (`NodeTree.tsx:417`) watches both `dragover` **and** `drop`; when the pointer is inside a **group** row it calls `preventDefault()`/`stopPropagation()` on the original and re-dispatches an equivalent `DragEvent` on the same `[role="treeitem"]` row with `clientY = rect.top + rect.height / 2`. The library's own `computeDrop` then nests, and the existing `handleMove` does the rest.
+2. **Both events must be replayed, not just `dragover`.** The HTML5 backend re-hovers on every `dragover` *and* again inside its own `onDrop` hook, so correcting only the drag-over still lets the drop decide from the real pointer y. The original must also keep its default prevented, or the browser never fires `drop` at all.
+3. **A thin edge band still belongs to the library.** `GROUP_EDGE_BAND = 0.08` (`NodeTree.tsx:44`) leaves the row's outer 2.5px routed to react-arborist, so deliberately inserting a project immediately above or below a group stays possible.
+4. **Groups only.** The interception is scoped to `node.data.kind === 'group'` (`NodeTree.tsx:273`). `isInternal` alone would also catch folders that contain subfolders and the root row, and every non-group row has to keep its top-half/bottom-half behaviour; the codebase already scopes "drop inside" to `kind === 'group'`.
+5. **No refusal rule moved.** `isDescendant` (`NodeTree.tsx:312`) and the guard in `handleMove` (`NodeTree.tsx:334-336`, `t('tree.moveIntoSelf')` followed by a reload) are untouched, so a node still cannot be dropped into its own descendant.
+
+**Why not patch `node_modules`.** A patched dependency is invisible to review, reverted by the next install, and would fix only this one tree; replaying the event uses a public surface — DOM events — and keeps every rule where it was.
+
+**Evidence.** `.tmp/drag-probe.mjs` against the built app (Electron on port 9423, isolated `--user-data-dir`), with "before" produced by disabling the edge band in one temporary constant and rebuilding. Fixture: root 1, group 试验组 8, project `beta` 6, folder `delta` 4, folder `gamma` 3.
+
+| dropped on | offset in the 32px row | parent_id before | after |
+|---|---|---|---|
+| 试验组 (group) | 5px (0.15) | **1** — the reported bug | **8** ✓ |
+| 试验组 (group) | 16px (0.50) | 8 | 8 ✓ |
+| 试验组 (group) | 27px (0.85) | 8 | 8 ✓ |
+| 试验组 (group) | 1px (edge band) | 1 | 1 ✓ |
+| `delta` (folder *with* a child) | 5px | 1 | 1 ✓ |
+| `gamma` (folder, leaf) | 5px | 1 | 1 ✓ |
+
+9/9 checks pass after, 8/9 before. `npm run typecheck` exit 0; `npm run test:unit` exit 0, 9 files / 188 tests.
+
+**Cost.** One capture-phase listener pair on a container that already exists, and an effect that re-runs when the tree's rows change. The replay allocates one synthetic `DragEvent` per dragging frame over a group row — a few hundred bytes at pointer-move rate, and only while a drag is in flight.
+
+**Lesson.** When a library derives a drop region from a hardcoded fraction of row height, the mismatch is invisible in the UI and only shows up as "sometimes it doesn't work", which is exactly the report that is easiest to dismiss. Here the target is semantically a container, so the whole row should mean "inside" and only a deliberate sliver should mean "order". A caveat worth keeping: in the test fixture the group was the last top-level row, where the library's `atBottom` branch returns `[node, undefined]` and degenerates into an append, so the bottom band already nested there — with another row below the group it would have shown the same bug, which this fix covers anyway.
+
+---
+
+## D-031 · The tree toolbar and the timeline measure their own containers
+
+**Context.** Two more instances of the defect D-028 recorded for the heatmap, reported in the same message: the tree toolbar's rightmost buttons collided with the `全景图` tab ("刷新和全景图这两个按钮会重叠有时候"), and the change timeline was "太小了，基本上每个点都连在一起".
+
+**Root cause — the toolbar.** The toolbar row (`TreePanel.tsx:338-390`) is a `flex` row of two labelled buttons, a `flex-1` spacer and three icon buttons. `.btn` (`styles.css:154-155`) carries `whitespace-nowrap`, so every button has a **min-content width it will never shrink below** and the `flex-1` spacer can only absorb whatever slack is left over. That row needs 277px; `LEFT_WIDTH_MIN = 240` (`stores/ui.ts:24`) lets the column be dragged narrower than that, and the column has no `overflow-hidden`, so the overflow simply paints over the neighbouring tab strip.
+
+**Root cause — the timeline, two of them.** (a) The content width came from `BUCKET_PX[zoom]` alone — 40px per month bucket — so the default *last 30 days* + *month* produced 260px of content inside a 615px viewport, drawing the whole timeline in the left 42% of its own lane area with a fixed 6px dot. (b) Dots in one bucket were fanned by `step = px / (evs.length + 1)`, so four events in a 40px bucket landed **3px** apart and touched. A third defect hid behind those two: the `ResizeObserver` effect had `[]` dependencies and returned early on a null ref, and the scroll container is not rendered at all while `lanes.length === 0` — so the observer was never attached, `scrollWidth` stayed 0, and the lane was permanently clamped to its floor. That is why the first build typechecked, measured 260px and looked exactly like "the fix did not work".
+
+**Decision.**
+
+1. **The toolbar sheds its labels before it overflows.** `TOOLBAR_LABEL_MIN_WIDTH = 300` (`TreePanel.tsx:41-47`) read from `useUi((s) => s.leftWidth)` (`TreePanel.tsx:66`); below it the `添加根目录` and `分组` buttons render icon-only, keeping both their `title` tooltip and an `aria-label`, so the accessible name does not disappear with the text. `LEFT_WIDTH_MIN`/`LEFT_WIDTH_MAX` are unchanged: 300 clears the 277px requirement by 23px and sits below the 320px default, so labels remain at ordinary widths.
+2. **The timeline derives one effective bucket width and every consumer reads it.** `effectiveBucketPx(available, bucketCount, zoom)` (`Timeline.tsx:103-106`) returns `Math.max(BUCKET_PX[zoom], available / bucketCount)`; `available` is `scrollWidth - LANE_LABEL_PX` measured by a `ResizeObserver` on `[data-testid="timeline-scroll"]`. All four consumers — the axis (`AxisStrip` now takes `px` as a prop), `slotOf`, dot placement and the cluster `x` — read that single number, so the axis and the dots cannot disagree. `BUCKET_PX[zoom]` survives as a *floor*, which keeps horizontal scrolling for genuinely wide content.
+3. **The dot-versus-cluster decision is geometric, not a count.** `DOT_MIN_STEP = DOT + 2` (`Timeline.tsx:76`); a bucket renders individual dots only when `evs.length <= Math.floor(px / DOT_MIN_STEP) - 1` **and** `evs.length <= CLUSTER_THRESHOLD`, and otherwise becomes the numbered `ClusterMarker`. `CLUSTER_THRESHOLD` was deliberately not lowered.
+4. **The measurement effect depends on the lanes existing** (`[lanes.length > 0]`) and sits below the `lanes` memo, so the ref it observes is populated by the time it runs; at the earlier position TypeScript rejected it outright (`TS2448: Block-scoped variable 'lanes' used before its declaration`).
+
+**Why not lower `CLUSTER_THRESHOLD`.** A count threshold cannot know how wide the bucket is. The same eight events fit comfortably at 218px per bucket and collide at 40px, so any fixed number is wrong at one end of the zoom range — the test has to be geometric.
+
+**Evidence.** Both probes ran against the built renderer in the real app at 1280×800, dSF 1.
+
+*Toolbar*, with the column dragged to its floor via the resize handle's arrow keys:
+
+| column width | toolbar `scrollWidth` / `clientWidth` | right edge of the last button vs the column edge |
+|---|---|---|
+| 240px, labels forced on | **277 / 239** — overflows | **276.7** > 240, overlapping the `全景图` tab (253–310) by 23.7px |
+| 240px, shipped | **239 / 239** | **231.3** — 8.7px clear, no overlap |
+| 304px, shipped | 303 / 303 | 295.3 |
+| 320px (default), shipped | 319 / 319 | labels visible |
+
+*Timeline*, default *last 30 days* + *month*:
+
+| metric | before | after |
+|---|---|---|
+| `[data-testid="timeline-scroll"]` `clientWidth` | 615 | 615 |
+| inner content width | **260** (42% of the lane) | **615** (100%) |
+| per-bucket width `px` | **40** | **218** |
+| dots / clusters | 13 dots overlapping | 12 dots, 0 clusters |
+| `minGap` between consecutive dots | **3** (dots touching) | **31.07** |
+| *day* × *last 90 days* | — | inner 2940px vs 615px viewport → scrolls, `minGap` 240px |
+
+Burst case: seeding 60 commits onto a single day renders **0 dots and one cluster** reading `60 次改动，点击放大查看`, instead of an unreadable smear.
+
+**Cost.** One `ResizeObserver` per timeline, and a re-derived width on every resize — cheap next to the layout it replaces. The toolbar branch adds a boolean to a component that already subscribes to `leftWidth` for its own width.
+
+**Lesson.** D-028's lesson again, from two directions: a component inside a user-resizable column must measure that column rather than assume it, and "fits" is a property of the container, not of the component. The second lesson is about instrumenting the fix: a `ResizeObserver` wired to a ref that is still null fails **silently**, so the component keeps its fallback value forever — which is indistinguishable from the fix not working. When a measured value does not move after a change, check that the effect ran at all before doubting the arithmetic. Measure the container.
+
 
 

@@ -280,7 +280,7 @@ export function AppShell(): JSX.Element {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <div className="flex min-h-0 flex-1">
         <aside
-          className="flex min-h-0 shrink-0 flex-col border-r"
+          className="glass-panel flex min-h-0 shrink-0 flex-col overflow-hidden border-r"
           style={{ width: leftWidth, borderColor: 'var(--border)' }}
           aria-label={t('app.treeLabel')}
         >
@@ -302,7 +302,7 @@ export function AppShell(): JSX.Element {
         />
 
         <main
-          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+          className="glass-panel flex min-w-0 flex-1 flex-col overflow-hidden"
           aria-label={t('app.mainViewLabel')}
         >
           {/* The tab strip keeps the middle column tied to the selection: a
@@ -397,7 +397,7 @@ export function AppShell(): JSX.Element {
               }}
             />
             <aside
-              className="flex min-h-0 shrink-0 flex-col border-l"
+              className="glass-panel flex min-h-0 shrink-0 flex-col overflow-hidden border-l"
               style={{ width: rightWidth, borderColor: 'var(--border)' }}
               aria-label={t('app.detailLabel')}
             >

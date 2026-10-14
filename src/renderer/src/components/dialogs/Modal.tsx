@@ -68,7 +68,7 @@ export function Modal({ title, onClose, children, className, footer }: ModalProp
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`card hub-pop-in flex max-h-[85vh] w-full max-w-lg flex-col shadow-xl ${className ?? ''}`}
+        className={`card glass-panel hub-pop-in flex max-h-[85vh] w-full max-w-lg flex-col shadow-xl ${className ?? ''}`}
         onKeyDown={onKeyDown}
       >
         <header

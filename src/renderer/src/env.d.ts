@@ -48,6 +48,9 @@ export interface BackgroundImage {
   filename: string | null
   origin: string | null
   bytes: number | null
+  /* §9.11 — a `hub-media://` URL for the stored copy; absent when the file is
+     gone, which is exactly when the renderer must stop painting it. */
+  url?: string
 }
 
 export interface ThumbReply {

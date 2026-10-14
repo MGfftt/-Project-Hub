@@ -38,6 +38,14 @@ import { descendantIds, kindLabel } from '@renderer/lib/tree'
  * leaving the UI out of sync.
  * ------------------------------------------------------------------------ */
 
+/* §9.1 — the toolbar row drops its two button labels below this column width.
+ * The full row (添加根目录 + 分组 + three icon buttons) needs 277px, while the column
+ * can be dragged down to LEFT_WIDTH_MIN (240px). The labelled buttons are
+ * `whitespace-nowrap`, so they cannot shrink and the row used to spill over the
+ * middle column's tab strip. 300 clears 277 with slack and stays under the 320px
+ * default, so the labels only go away when the column is genuinely narrow. */
+const TOOLBAR_LABEL_MIN_WIDTH = 300
+
 /** One confirmation dialog serves every destructive action in this panel. */
 interface PendingConfirm {
   title: string
@@ -55,6 +63,11 @@ export function TreePanel(): JSX.Element {
   const selectedId = useUi((s) => s.selectedId)
   const select = useUi((s) => s.select)
   const setStatus = useUi((s) => s.setStatus)
+  const leftWidth = useUi((s) => s.leftWidth)
+
+  /** §9.1 — narrow columns render the two labelled toolbar buttons as icons only,
+   *  keeping their title/aria-label tooltip (see TOOLBAR_LABEL_MIN_WIDTH). */
+  const showToolbarLabels = leftWidth >= TOOLBAR_LABEL_MIN_WIDTH
 
   const [roots, setRoots] = useState<Root[]>([])
   const [showRoots, setShowRoots] = useState(false)
@@ -343,20 +356,22 @@ export function TreePanel(): JSX.Element {
           type="button"
           className="btn btn-ghost focus-ring"
           title={t('tree.addRootTitle')}
+          aria-label={showToolbarLabels ? undefined : t('tree.addRoot')}
           disabled={busy}
           onClick={() => void pickRoot()}
         >
           <Plus size={14} aria-hidden />
-          {t('tree.root')}
+          {showToolbarLabels ? t('tree.root') : null}
         </button>
         <button
           type="button"
           className="btn btn-ghost focus-ring"
           title={t('tree.newGroupTitle')}
+          aria-label={showToolbarLabels ? undefined : t('tree.newGroup')}
           onClick={() => void newGroup()}
         >
           <FolderPlus size={14} aria-hidden />
-          {t('kind.group')}
+          {showToolbarLabels ? t('kind.group') : null}
         </button>
         <span className="flex-1" />
         <button

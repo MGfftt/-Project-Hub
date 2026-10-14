@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import { applyResolvedTheme, readStoredThemePref, systemPrefersDark } from './lib/theme'
+import { applyResolvedTheme, isThemePref, readStoredThemePref, systemPrefersDark } from './lib/theme'
 import { readStoredLang, setLang } from './lib/i18n'
+import { applyWallpaper, readStoredWallpaper, syncWallpaperFromSettings } from './lib/wallpaper'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -33,7 +34,7 @@ async function syncThemeFromSettings(): Promise<void> {
   if (!hub) return
   try {
     const raw = await hub.settings.get('theme')
-    if (raw === 'light' || raw === 'dark' || raw === 'system') {
+    if (isThemePref(raw)) {
       applyResolvedTheme(raw, systemPrefersDark())
     }
   } catch {
@@ -63,6 +64,16 @@ async function syncLangFromSettings(): Promise<void> {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Wallpaper (§9.11)
+ *
+ * The chosen picture lives in `userData/backgrounds`; the hint paints it on the
+ * first frame and the settings read corrects it. Nothing else in the renderer
+ * ever touched this file, which is why picking one used to do nothing.
+ * ------------------------------------------------------------------------ */
+
+applyWallpaper(readStoredWallpaper())
+
 createRoot(container).render(
   <StrictMode>
     <App />
@@ -71,3 +82,4 @@ createRoot(container).render(
 
 void syncThemeFromSettings()
 void syncLangFromSettings()
+void syncWallpaperFromSettings()

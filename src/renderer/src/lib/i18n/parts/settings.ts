@@ -31,6 +31,7 @@ export const settings: Dict = {
   'settings.themeLight': ['浅色', 'Light'],
   'settings.themeDark': ['深色', 'Dark'],
   'settings.themeSystem': ['跟随系统', 'Follow system'],
+  'settings.themeGlass': ['毛玻璃', 'Frosted glass'],
   'settings.language': ['语言', 'Language'],
   'settings.languageHint': ['界面语言', 'Interface language'],
   'settings.compactMode': ['紧凑模式', 'Compact mode'],
@@ -39,6 +40,10 @@ export const settings: Dict = {
   'settings.chooseImage': ['选择图片', 'Choose image'],
   'settings.clear': ['清除', 'Clear'],
   'settings.notSet': ['未设置', 'Not set'],
+  'settings.backgroundHint': [
+    '选好之后立刻生效：三个栏位会变成半透明，图片透在后面；想要更明显的玻璃感，把主题选成「毛玻璃」。',
+    'Takes effect immediately: the three columns turn translucent so the picture shows through. Pick the “Frosted glass” theme for a stronger effect.'
+  ],
   'settings.backgroundSet': ['已设置背景图片', 'Background image set'],
   'settings.backgroundCleared': ['已清除背景图片', 'Background image cleared'],
   'settings.backgroundClearFailed': ['清除背景图片失败', 'Could not clear the background image'],

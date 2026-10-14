@@ -5,6 +5,7 @@ import type { AppInfo, BackgroundImage } from '@renderer/env'
 import type { ThemePref } from '@renderer/lib/theme'
 import { formatBytes, formatDateTime, formatDuration, formatRelativeTime } from '@renderer/lib/format'
 import { getLang, LANGUAGES, setLang, t, type Lang } from '@renderer/lib/i18n'
+import { applyWallpaper } from '@renderer/lib/wallpaper'
 import { useUi } from '@renderer/stores/ui'
 import Modal from '@renderer/components/dialogs/Modal'
 
@@ -22,7 +23,10 @@ export interface SettingsDialogProps {
 const THEME_OPTIONS: ReadonlyArray<{ value: ThemePref; key: string }> = [
   { value: 'light', key: 'settings.themeLight' },
   { value: 'dark', key: 'settings.themeDark' },
-  { value: 'system', key: 'settings.themeSystem' }
+  { value: 'system', key: 'settings.themeSystem' },
+  /* §9.11 — frosted glass follows the system for light/dark and only makes the
+     surfaces translucent, so it reads as a fourth choice in this row. */
+  { value: 'glass', key: 'settings.themeGlass' }
 ]
 
 const TASK_LABELS: Record<string, string> = {
@@ -102,6 +106,11 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
     [writeSetting]
   )
 
+  /**
+   * §9.11 — the picture is painted the moment it is chosen. Before this the
+   * dialog only recorded a file name, so picking one looked like nothing
+   * happened until (never) the next launch.
+   */
   const onChooseBackground = useCallback((): void => {
     const hub = window.hub
     if (!hub) return
@@ -111,6 +120,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .then((res) => {
         if (res.ok && res.image) {
           setImage(res.image)
+          applyWallpaper((res.image as { url?: string }).url ?? null)
           setStatus(t('settings.backgroundSet'), 'info')
         } else if (res.error) {
           setStatus(res.error, 'error')
@@ -127,6 +137,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .clear()
       .then(() => {
         setImage({ filename: null, origin: null, bytes: null })
+        applyWallpaper(null)
         setStatus(t('settings.backgroundCleared'), 'info')
       })
       .catch(() => setStatus(t('settings.backgroundClearFailed'), 'error'))
@@ -208,6 +219,18 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
         </Field>
         <Field label={t('settings.background')}>
           <div className="flex items-center gap-2">
+            <span
+              data-background-preview
+              aria-hidden
+              className="h-6 w-10 shrink-0 rounded border"
+              style={{
+                borderColor: 'var(--border)',
+                backgroundColor: 'var(--hover)',
+                backgroundImage: image?.url ? `url("${image.url}")` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+            />
             <span className="text-[11px] text-[var(--text-dim)]">
               {image?.filename
                 ? `${image.filename}${image.bytes === null ? '' : ` · ${formatBytes(image.bytes)}`}`
@@ -226,6 +249,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
             </button>
           </div>
         </Field>
+        <p className="px-2 pb-1 text-[11px] leading-5 text-[var(--text-dim)]">
+          {t('settings.backgroundHint')}
+        </p>
         <Field label={t('settings.language')}>
           <div className="flex gap-1" role="radiogroup" aria-label={t('settings.languageHint')}>
             {LANGUAGES.map((opt) => (
