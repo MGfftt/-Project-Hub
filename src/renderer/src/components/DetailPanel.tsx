@@ -9,7 +9,16 @@ import {
   formatNoteLength,
   formatRelativeTime
 } from '@renderer/lib/format'
-import { eventColor, nodeColorLabel, nodeColorValue, NODE_COLORS, statusColor, tagStyle } from '@renderer/lib/colors'
+import {
+  eventColor,
+  nodeColorKey,
+  nodeColorLabel,
+  nodeColorValue,
+  NODE_COLORS,
+  statusColor,
+  tagStyle
+} from '@renderer/lib/colors'
+import { t, tCount } from '@renderer/lib/i18n'
 import { descendantIds, kindLabel, statusLabel } from '@renderer/lib/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
@@ -38,22 +47,22 @@ type TabId = 'overview' | 'changes' | 'annotations'
 
 interface TabDef {
   id: TabId
-  label: string
+  labelKey: string
 }
 
 const TABS: readonly TabDef[] = [
-  { id: 'overview', label: '概览' },
-  { id: 'changes', label: '改动' },
-  { id: 'annotations', label: '标注' }
+  { id: 'overview', labelKey: 'detail.overview' },
+  { id: 'changes', labelKey: 'detail.changes' },
+  { id: 'annotations', labelKey: 'detail.annotations' }
 ]
 
 const STATUS_OPTIONS: readonly NodeStatus[] = ['active', 'paused', 'done', 'archived']
 
-const ICON_TYPE_LABELS: Record<TreeNode['icon_type'], string> = {
-  auto: '自动',
-  lucide: '内置',
-  emoji: '表情',
-  image: '图片'
+const ICON_TYPE_KEYS: Record<TreeNode['icon_type'], string> = {
+  auto: 'detail.iconAuto',
+  lucide: 'detail.iconLucide',
+  emoji: 'detail.iconEmoji',
+  image: 'detail.iconImage'
 }
 
 /** §4: the 改动 tab shows the twenty most recent events. */
@@ -79,8 +88,8 @@ export function DetailPanel(): JSX.Element {
 function NoSelection(): JSX.Element {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-      <p className="text-sm text-[var(--text-dim)]">未选择节点</p>
-      <p className="text-xs text-[var(--text-dim)]">在左侧项目树中选择一个节点</p>
+      <p className="text-sm text-[var(--text-dim)]">{t('detail.noSelection')}</p>
+      <p className="text-xs text-[var(--text-dim)]">{t('detail.noSelectionHint')}</p>
     </div>
   )
 }
@@ -160,7 +169,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       })
       .catch((err: unknown) => {
         if (!alive) return
-        setLoadError(err instanceof Error ? err.message : '读取节点详情失败')
+        setLoadError(err instanceof Error ? err.message : t('detail.detailLoadFailed'))
       })
     return () => {
       alive = false
@@ -190,7 +199,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       // payload, so a bump would only force a pointless stats refetch per burst.
       void hub.nodes
         .update(id, { note_md: value })
-        .catch(() => setStatus('保存笔记失败', 'error'))
+        .catch(() => setStatus(t('detail.noteSaveFailed'), 'error'))
     },
     [id, setStatus]
   )
@@ -229,7 +238,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
     void hub.nodes
       .update(id, { tags: next })
       .then(() => useTree.getState().bump())
-      .catch(() => setStatus('保存标签失败', 'error'))
+      .catch(() => setStatus(t('detail.tagSaveFailed'), 'error'))
   }
 
   const addTag = (): void => {
@@ -257,9 +266,9 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .setDisplayName(id, value)
       .then(() => {
         useTree.getState().bump()
-        setStatus(value === null ? '已恢复磁盘名称' : '已更新显示名', 'info')
+        setStatus(value === null ? t('detail.nameRestored') : t('detail.nameUpdated'), 'info')
       })
-      .catch(() => setStatus('更新显示名失败', 'error'))
+      .catch(() => setStatus(t('detail.nameUpdateFailed'), 'error'))
   }
 
   const changeStatus = (next: NodeStatus): void => {
@@ -272,11 +281,11 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .update(id, { status: next })
       .then(() => {
         useTree.getState().bump()
-        setStatus(`状态已改为${statusLabel(next)}`, 'info')
+        setStatus(t('detail.statusChanged', { status: statusLabel(next) }), 'info')
       })
       .catch(() => {
         setNodeStatus(previous)
-        setStatus('更新状态失败', 'error')
+        setStatus(t('detail.statusUpdateFailed'), 'error')
       })
   }
 
@@ -293,11 +302,14 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .then(() => {
         useTree.getState().bump()
         const label = nodeColorLabel(next)
-        setStatus(label === null ? '已恢复默认颜色' : `颜色已改为${label}`, 'info')
+        setStatus(
+          label === null ? t('detail.colorReset') : t('detail.colorChanged', { color: label }),
+          'info'
+        )
       })
       .catch(() => {
         setColor(previous)
-        setStatus('更新颜色失败', 'error')
+        setStatus(t('detail.colorUpdateFailed'), 'error')
       })
   }
 
@@ -310,8 +322,8 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
     if (!hub) return
     void hub.shell
       .copyPath(id)
-      .then(() => setStatus('已复制路径', 'info'))
-      .catch(() => setStatus('复制路径失败', 'error'))
+      .then(() => setStatus(t('detail.pathCopied'), 'info'))
+      .catch(() => setStatus(t('detail.pathCopyFailed'), 'error'))
   }
 
   const onRevealFolder = (): void => {
@@ -319,8 +331,8 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
     if (!hub) return
     void hub.shell
       .revealFolder(id)
-      .then(() => setStatus('已在文件管理器中打开', 'info'))
-      .catch(() => setStatus('打开文件管理器失败', 'error'))
+      .then(() => setStatus(t('detail.revealed'), 'info'))
+      .catch(() => setStatus(t('detail.revealFailed'), 'error'))
   }
 
   /* --- 改动: this node plus every descendant ------------------------ */
@@ -344,7 +356,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .catch((err: unknown) => {
         if (!alive) return
         setEvents([])
-        setEventsError(err instanceof Error ? err.message : '读取改动记录失败')
+        setEventsError(err instanceof Error ? err.message : t('error.eventsLoad'))
       })
     return () => {
       alive = false
@@ -372,10 +384,15 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .getState()
       .sync()
       .then((result) => {
-        setStatus(result.newEvents > 0 ? `同步完成，新增 ${result.newEvents} 条改动` : '同步完成，无新增改动', 'info')
+        setStatus(
+          result.newEvents > 0
+            ? t('detail.syncDone', { n: result.newEvents })
+            : t('detail.syncDoneEmpty'),
+          'info'
+        )
         useTree.getState().bump()
       })
-      .catch(() => setStatus('同步 Git 失败', 'error'))
+      .catch(() => setStatus(t('error.gitSync'), 'error'))
       .finally(() => setSyncing(false))
   }
 
@@ -405,22 +422,22 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
           ref={tablistRef}
           className="flex items-center gap-1"
           role="tablist"
-          aria-label="节点详情"
+          aria-label={t('detail.tablistLabel')}
           onKeyDown={onTabKeyDown}
         >
-          {TABS.map((t) => (
+          {TABS.map((item) => (
             <button
-              key={t.id}
+              key={item.id}
               type="button"
               role="tab"
-              data-tab={t.id}
-              id={`detail-tab-${t.id}`}
-              aria-selected={tab === t.id}
-              aria-controls={`detail-panel-${t.id}`}
-              className={`btn h-6 px-2.5 py-0 text-[11px] focus-ring ${tab === t.id ? 'btn-primary' : ''}`}
-              onClick={() => setTab(t.id)}
+              data-tab={item.id}
+              id={`detail-tab-${item.id}`}
+              aria-selected={tab === item.id}
+              aria-controls={`detail-panel-${item.id}`}
+              className={`btn h-6 px-2.5 py-0 text-[11px] focus-ring ${tab === item.id ? 'btn-primary' : ''}`}
+              onClick={() => setTab(item.id)}
             >
-              {t.label}
+              {t(item.labelKey)}
             </button>
           ))}
         </div>
@@ -435,15 +452,15 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
         {loadError ? <p className="mb-2 text-xs text-[var(--tone-error)]">{loadError}</p> : null}
 
         {tab === 'overview' ? (
-          <section aria-label="概览">
-            <Group title="基本">
-              <Field label="名称">{node.name}</Field>
-              <Field label="显示名">
+          <section aria-label={t('detail.overview')}>
+            <Group title={t('detail.basic')}>
+              <Field label={t('detail.name')}>{node.name}</Field>
+              <Field label={t('detail.displayName')}>
                 <input
                   className="input focus-ring h-6 text-xs"
                   value={displayName}
                   placeholder={node.name}
-                  aria-label="显示名"
+                  aria-label={t('detail.displayName')}
                   onChange={(e) => setDisplayName(e.target.value)}
                   onBlur={commitDisplayName}
                   onKeyDown={(e) => {
@@ -458,9 +475,9 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                   }}
                 />
               </Field>
-              <Field label="类型">{kindLabel(node.kind)}</Field>
-              <Field label="状态">
-                <span className="flex flex-wrap gap-1" role="group" aria-label="状态">
+              <Field label={t('detail.type')}>{kindLabel(node.kind)}</Field>
+              <Field label={t('detail.status')}>
+                <span className="flex flex-wrap gap-1" role="group" aria-label={t('detail.status')}>
                   {STATUS_OPTIONS.map((option) => (
                     <button
                       key={option}
@@ -481,10 +498,10 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                   ))}
                 </span>
               </Field>
-              <Field label="操作">
+              <Field label={t('detail.actions')}>
                 {path === null ? (
                   <span className="text-[11px] text-[var(--text-dim)]">
-                    虚拟节点，没有对应的磁盘目录
+                    {t('detail.virtualNode')}
                   </span>
                 ) : (
                   <span className="flex flex-wrap items-center gap-1">
@@ -493,40 +510,48 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                       className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
                       onClick={onCopyPath}
                     >
-                      复制路径
+                      {t('detail.copyPath')}
                     </button>
                     <button
                       type="button"
                       className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
                       onClick={onRevealFolder}
                     >
-                      在文件管理器中显示
+                      {t('detail.revealInManager')}
                     </button>
                   </span>
                 )}
               </Field>
             </Group>
 
-            <Group title="磁盘">
-              <Field label="大小">
-                {stats === null || stats.diskSizeBytes === null ? '计算中…' : formatBytes(stats.diskSizeBytes)}
+            <Group title={t('detail.disk')}>
+              <Field label={t('detail.size')}>
+                {stats === null || stats.diskSizeBytes === null
+                  ? t('detail.computing')
+                  : formatBytes(stats.diskSizeBytes)}
               </Field>
-              <Field label="文件数">
-                {stats === null || stats.fileCount === null ? '计算中…' : formatCount(stats.fileCount)}
+              <Field label={t('detail.fileCount')}>
+                {stats === null || stats.fileCount === null
+                  ? t('detail.computing')
+                  : formatCount(stats.fileCount)}
               </Field>
-              <Field label="创建时间">{stats === null ? '—' : formatDateTime(stats.createdAt)}</Field>
-              <Field label="修改时间">{stats === null ? '—' : formatDateTime(stats.modifiedAt)}</Field>
+              <Field label={t('detail.createdAt')}>
+                {stats === null ? '—' : formatDateTime(stats.createdAt)}
+              </Field>
+              <Field label={t('detail.modifiedAt')}>
+                {stats === null ? '—' : formatDateTime(stats.modifiedAt)}
+              </Field>
             </Group>
 
             {stats !== null && stats.isGitRepo ? (
               <Group title="Git">
-                <Field label="远程">{stats.gitRemote || '—'}</Field>
-                <Field label="分支">{stats.gitBranch || '—'}</Field>
+                <Field label={t('detail.gitRemote')}>{stats.gitRemote || '—'}</Field>
+                <Field label={t('detail.gitBranch')}>{stats.gitBranch || '—'}</Field>
               </Group>
             ) : null}
 
-            <Group title="图标">
-              <Field label="图标">
+            <Group title={t('detail.icon')}>
+              <Field label={t('detail.icon')}>
                 <span className="flex items-center gap-2">
                   <span
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px]"
@@ -537,32 +562,36 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                   </span>
                   <span
                     className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-dim)]"
-                    title={node.icon_value ?? ICON_TYPE_LABELS[node.icon_type]}
+                    title={node.icon_value ?? t(ICON_TYPE_KEYS[node.icon_type])}
                   >
-                    {node.icon_value ?? ICON_TYPE_LABELS[node.icon_type]}
+                    {node.icon_value ?? t(ICON_TYPE_KEYS[node.icon_type])}
                   </span>
                   <button
                     type="button"
                     className="btn focus-ring h-6 shrink-0 px-2 py-0 text-[11px]"
                     onClick={() => useUi.getState().openDialog('icon', id)}
                   >
-                    更改图标
+                    {t('detail.changeIcon')}
                   </button>
                 </span>
               </Field>
             </Group>
 
-            <Group title="颜色">
-              <Field label="颜色">
-                <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label="节点颜色">
+            <Group title={t('detail.color')}>
+              <Field label={t('detail.color')}>
+                <span
+                  className="flex flex-wrap items-center gap-1.5"
+                  role="group"
+                  aria-label={t('detail.nodeColor')}
+                >
                   {NODE_COLORS.map((entry) => (
                     <button
                       key={entry.id}
                       type="button"
                       data-color={entry.id}
                       aria-pressed={color === entry.value}
-                      aria-label={`颜色 ${entry.label}`}
-                      title={entry.label}
+                      aria-label={t(nodeColorKey(entry.id))}
+                      title={t(nodeColorKey(entry.id))}
                       className="focus-ring h-5 w-5 shrink-0 rounded-full border-2"
                       style={{
                         background: entry.value,
@@ -578,17 +607,17 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                     className={`btn h-5 shrink-0 px-1.5 py-0 text-[11px] focus-ring ${
                       color === null ? 'btn-primary' : ''
                     }`}
-                    title="不使用自定义颜色"
+                    title={t('detail.noCustomColor')}
                     onClick={() => changeColor(null)}
                   >
-                    默认
+                    {t('color.none')}
                   </button>
                 </span>
               </Field>
             </Group>
 
-            <Group title="标签">
-              <Field label="标签">
+            <Group title={t('detail.tags')}>
+              <Field label={t('detail.tags')}>
                 {tags.length > 0 ? (
                   <span className="flex flex-wrap gap-1">
                     {tags.map((tag) => (
@@ -606,18 +635,18 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
         ) : null}
 
         {tab === 'changes' ? (
-          <section aria-label="改动" className="flex flex-col gap-3">
+          <section aria-label={t('detail.changes')} className="flex flex-col gap-3">
             <Heatmap />
 
             {/* 全部 / 仅 Git / 仅 文件 */}
-            <div className="flex items-center gap-1" role="group" aria-label="改动来源筛选">
+            <div className="flex items-center gap-1" role="group" aria-label={t('detail.sourceFilter')}>
               <button
                 type="button"
                 className={sourceTabClass('all')}
                 aria-pressed={sourceFilter === 'all'}
                 onClick={() => setSourceFilter('all')}
               >
-                全部
+                {t('detail.sourceAll')}
               </button>
               <button
                 type="button"
@@ -625,7 +654,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                 aria-pressed={sourceFilter === 'git'}
                 onClick={() => setSourceFilter('git')}
               >
-                仅 Git
+                {t('detail.sourceGitOnly')}
               </button>
               <button
                 type="button"
@@ -633,7 +662,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                 aria-pressed={sourceFilter === 'fs'}
                 onClick={() => setSourceFilter('fs')}
               >
-                仅 文件
+                {t('detail.sourceFilesOnly')}
               </button>
             </div>
 
@@ -641,23 +670,23 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
 
             {showChangesEmpty ? (
               <EmptyState
-                title="该项目暂无改动记录"
-                description="先同步 Git 历史，或用文件监视记录之后的改动"
-                actionLabel="立即同步 Git"
+                title={t('detail.noChangesTitle')}
+                description={t('detail.noChangesHint')}
+                actionLabel={t('detail.syncNow')}
                 onAction={onSyncGit}
               />
             ) : visibleEvents.length === 0 ? (
               stats === null ? null : (
-                <p className="px-1 text-xs text-[var(--text-dim)]">暂无改动记录</p>
+                <p className="px-1 text-xs text-[var(--text-dim)]">{t('detail.noChanges')}</p>
               )
             ) : (
-              <ul className="flex flex-col" aria-label="最近的改动">
+              <ul className="flex flex-col" aria-label={t('detail.recentChanges')}>
                 {visibleEvents.map((event) => (
                   <li key={event.id}>
                     <button
                       type="button"
                       className="focus-ring flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--hover)]"
-                      title={event.message || '无提交信息'}
+                      title={event.message || t('detail.noCommitMessage')}
                       onClick={openInTimeline}
                     >
                       <span
@@ -667,12 +696,16 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs text-[var(--text)]">
-                          {event.message || '无提交信息'}
+                          {event.message || t('detail.noCommitMessage')}
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-dim)]">
                           <span>{formatRelativeTime(event.occurred_at)}</span>
                           <span>{formatDelta(event.insertions, event.deletions)}</span>
-                          <span>{formatCount(event.file_count)} 个文件</span>
+                          <span>
+                            {tCount('detail.eventFilesOne', 'detail.eventFiles', event.file_count, {
+                              n: formatCount(event.file_count)
+                            })}
+                          </span>
                         </span>
                       </span>
                     </button>
@@ -682,31 +715,33 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
             )}
 
             {syncing ? (
-              <p className="px-1 text-[11px] text-[var(--text-dim)]">正在同步 Git…</p>
+              <p className="px-1 text-[11px] text-[var(--text-dim)]">{t('detail.syncing')}</p>
             ) : null}
           </section>
         ) : null}
 
         {tab === 'annotations' ? (
-          <section aria-label="标注" className="flex flex-col gap-3">
+          <section aria-label={t('detail.annotations')} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <div className="flex items-baseline gap-2">
-                <span className="text-[11px] font-semibold text-[var(--text-dim)]">笔记</span>
+                <span className="text-[11px] font-semibold text-[var(--text-dim)]">
+                  {t('detail.note')}
+                </span>
                 <span className="ml-auto text-[11px] text-[var(--text-dim)]">{formatNoteLength(note)}</span>
               </div>
               <textarea
                 ref={noteRef}
                 className="input focus-ring min-h-[9rem] resize-y leading-5"
                 value={note}
-                placeholder="支持 Markdown，输入后自动保存…"
-                aria-label="笔记"
+                placeholder={t('detail.notePlaceholder')}
+                aria-label={t('detail.note')}
                 spellCheck={false}
                 onChange={(e) => onNoteChange(e.target.value)}
                 onBlur={flushNote}
               />
               <div className="flex items-start gap-2">
                 <p className="flex-1 text-[11px] leading-4 text-[var(--text-dim)]">
-                  标注只保存在本程序的数据库中，不会写入项目目录
+                  {t('detail.noteLocalOnly')}
                 </p>
                 {/* Autosave is debounced; this is for a deliberate save. */}
                 <button
@@ -714,13 +749,15 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                   className="btn focus-ring h-6 shrink-0 px-2 py-0 text-[11px]"
                   onClick={flushNote}
                 >
-                  保存
+                  {t('detail.save')}
                 </button>
               </div>
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold text-[var(--text-dim)]">标签</span>
+              <span className="text-[11px] font-semibold text-[var(--text-dim)]">
+                {t('detail.tags')}
+              </span>
               <div
                 className="flex flex-wrap items-center gap-1 rounded-md border px-1.5 py-1"
                 style={{ borderColor: 'var(--border)' }}
@@ -731,7 +768,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                     <button
                       type="button"
                       className="focus-ring shrink-0 rounded-full px-0.5 leading-none"
-                      aria-label={`移除标签 ${tag}`}
+                      aria-label={t('detail.removeTag', { tag })}
                       onClick={() => removeTag(tag)}
                     >
                       ✕
@@ -741,8 +778,8 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                 <input
                   className="input focus-ring h-6 min-w-[6rem] flex-1"
                   value={tagDraft}
-                  placeholder="添加标签…"
-                  aria-label="添加标签"
+                  placeholder={t('detail.addTagPlaceholder')}
+                  aria-label={t('detail.addTag')}
                   onChange={(e) => setTagDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -759,7 +796,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                 />
               </div>
               <p className="text-[11px] leading-4 text-[var(--text-dim)]">
-                按 Enter 添加标签，按 Backspace 删除最后一个标签
+                {t('detail.tagHint')}
               </p>
             </div>
           </section>
@@ -801,7 +838,7 @@ function Field({ label, children }: { label: string; children: ReactNode }): JSX
 /** A one-character stand-in for the icon: emoji verbatim, otherwise its kind. */
 function iconToken(node: TreeNode): string {
   if (node.icon_type === 'emoji' && node.icon_value) return node.icon_value
-  return ICON_TYPE_LABELS[node.icon_type].slice(0, 1)
+  return t(ICON_TYPE_KEYS[node.icon_type]).slice(0, 1)
 }
 
 export default DetailPanel

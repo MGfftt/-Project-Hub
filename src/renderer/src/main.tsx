@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { applyResolvedTheme, readStoredThemePref, systemPrefersDark } from './lib/theme'
+import { readStoredLang, setLang } from './lib/i18n'
 import './styles.css'
 
 const container = document.getElementById('root')
@@ -40,6 +41,28 @@ async function syncThemeFromSettings(): Promise<void> {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Language (§9.10)
+ *
+ * Same shape as the theme: the localStorage hint paints the first frame in the
+ * remembered language, then the `settings` row corrects it. Setting it before
+ * `render` is what keeps a Chinese↔English switch from flashing the other
+ * language on every launch.
+ * ------------------------------------------------------------------------ */
+
+setLang(readStoredLang())
+
+async function syncLangFromSettings(): Promise<void> {
+  const hub = window.hub
+  if (!hub) return
+  try {
+    const raw = await hub.settings.get('language')
+    if (raw === 'zh' || raw === 'en') setLang(raw)
+  } catch {
+    /* best effort: the hint from localStorage already painted a usable language */
+  }
+}
+
 createRoot(container).render(
   <StrictMode>
     <App />
@@ -47,3 +70,4 @@ createRoot(container).render(
 )
 
 void syncThemeFromSettings()
+void syncLangFromSettings()

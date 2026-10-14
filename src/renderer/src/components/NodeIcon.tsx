@@ -5,6 +5,7 @@ import type { TreeNode } from '@shared/types'
 import { autoIconName, defForNode, isBuiltinIcon, mediaUrl } from '@renderer/lib/treeIcons'
 import { resolveLucideIcon } from '@renderer/lib/lucideIcons'
 import { statusColor } from '@renderer/lib/colors'
+import { t } from '@renderer/lib/i18n'
 
 /** The slice of a lucide-react component this file needs. */
 type DynIcon = LucideIcon
@@ -99,7 +100,7 @@ export const NodeIcon = memo(function NodeIcon({
           size={size}
           className="text-amber-500 dark:text-amber-400"
           role="img"
-          aria-label="路径不存在"
+          aria-label={t('tree.pathMissing')}
         />
       ) : image ? (
         <img

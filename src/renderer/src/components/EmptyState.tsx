@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { t } from '@renderer/lib/i18n'
 
 export interface EmptyStateProps {
   title: string
@@ -58,7 +59,7 @@ function HubGlyph(): JSX.Element {
       viewBox="0 0 104 80"
       fill="none"
       role="img"
-      aria-label="项目库示意图"
+      aria-label={t('tree.emptyGlyph')}
       className="shrink-0"
     >
       <path d="M52 40 24 20M52 40h28M52 40 30 64" stroke="var(--border)" strokeWidth="1.4" />

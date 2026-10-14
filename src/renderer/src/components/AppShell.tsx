@@ -4,6 +4,7 @@ import type { BackgroundStatus, TrayState } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useUi } from '@renderer/stores/ui'
+import { t } from '@renderer/lib/i18n'
 import {
   descendantIds,
   flattenVisible,
@@ -150,8 +151,8 @@ export function AppShell(): JSX.Element {
         if (rootId !== null) {
           void window.hub?.roots
             .rescan(rootId)
-            .then(() => useUi.getState().setStatus('已开始重新扫描', 'info'))
-            .catch(() => useUi.getState().setStatus('重新扫描失败', 'error'))
+            .then(() => useUi.getState().setStatus(t('app.rescanStarted'), 'info'))
+            .catch(() => useUi.getState().setStatus(t('app.rescanFailed'), 'error'))
         }
         return
       }
@@ -201,10 +202,10 @@ export function AppShell(): JSX.Element {
             .openFolder(selected)
             .then((res) => {
               const ui2 = useUi.getState()
-              if (res.ok) ui2.setStatus('已打开文件夹', 'info')
-              else ui2.setStatus(res.error ?? '打开文件夹失败', 'error')
+              if (res.ok) ui2.setStatus(t('app.folderOpened'), 'info')
+              else ui2.setStatus(res.error ?? t('app.folderOpenFailed'), 'error')
             })
-            .catch(() => useUi.getState().setStatus('打开文件夹失败', 'error'))
+            .catch(() => useUi.getState().setStatus(t('app.folderOpenFailed'), 'error'))
           break
         }
         case 'F2': {
@@ -217,17 +218,17 @@ export function AppShell(): JSX.Element {
           if (selected === null) break
           e.preventDefault()
           const node = tree.byId.get(selected)
-          const name = node?.display_name || node?.name || '该节点'
+          const name = node?.display_name || node?.name || t('app.nodeFallback')
           setConfirmState({
-            message: `确定将「${name}」从库中移除吗？磁盘上的文件夹不会被删除。`,
+            message: t('app.removeConfirm', { name }),
             onConfirm: () => {
               void window.hub?.nodes
                 .remove(selected)
                 .then(() => {
                   useTree.getState().bump()
-                  useUi.getState().setStatus('已从库中移除', 'info')
+                  useUi.getState().setStatus(t('app.removedFromLibrary'), 'info')
                 })
-                .catch(() => useUi.getState().setStatus('移除失败', 'error'))
+                .catch(() => useUi.getState().setStatus(t('app.removeFailed'), 'error'))
             }
           })
           break
@@ -281,7 +282,7 @@ export function AppShell(): JSX.Element {
         <aside
           className="flex min-h-0 shrink-0 flex-col border-r"
           style={{ width: leftWidth, borderColor: 'var(--border)' }}
-          aria-label="项目树"
+          aria-label={t('app.treeLabel')}
         >
           <TreePanel />
         </aside>
@@ -289,7 +290,7 @@ export function AppShell(): JSX.Element {
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="调整项目树宽度"
+          aria-label={t('app.treeResizeLabel')}
           tabIndex={0}
           className="resize-handle focus-ring"
           onPointerDown={resizeLeft}
@@ -300,13 +301,16 @@ export function AppShell(): JSX.Element {
           }}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden" aria-label="主视图">
+        <main
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+          aria-label={t('app.mainViewLabel')}
+        >
           {/* The tab strip keeps the middle column tied to the selection: a
               plain click on a tree node lands on 概览 instead of the old
               "选择一个项目" placeholder, which read as "nothing happened". */}
           <div
             role="tablist"
-            aria-label="主视图切换"
+            aria-label={t('app.mainViewTabsLabel')}
             className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
             style={{ borderColor: 'var(--border)' }}
           >
@@ -315,10 +319,10 @@ export function AppShell(): JSX.Element {
               role="tab"
               aria-selected={mainView === 'map'}
               className={mainView === 'map' ? 'btn btn-primary' : 'btn btn-ghost'}
-              title="把整个项目库画成一棵树，不需要先选中节点"
+              title={t('app.tab.mapTitle')}
               onClick={() => setMainView('map')}
             >
-              全景图
+              {t('app.tab.map')}
             </button>
             <button
               type="button"
@@ -327,7 +331,7 @@ export function AppShell(): JSX.Element {
               className={mainView === 'overview' ? 'btn btn-primary' : 'btn btn-ghost'}
               onClick={() => setMainView('overview')}
             >
-              概览
+              {t('app.tab.overview')}
             </button>
             <button
               type="button"
@@ -336,7 +340,7 @@ export function AppShell(): JSX.Element {
               className={mainView === 'timeline' ? 'btn btn-primary' : 'btn btn-ghost'}
               onClick={() => setMainView('timeline')}
             >
-              改动时间线
+              {t('app.tab.timeline')}
             </button>
             {selected ? (
               <span className="ml-2 truncate text-[var(--font-minor)] text-[var(--text-dim)]">
@@ -348,11 +352,11 @@ export function AppShell(): JSX.Element {
               type="button"
               className={detailOpen ? 'btn btn-primary' : 'btn btn-ghost'}
               aria-pressed={detailOpen}
-              title="显示或隐藏右侧属性面板（状态、图标、标签）"
+              title={t('app.propertiesTitle')}
               onClick={() => setDetailOpen(!detailOpen)}
             >
               <SlidersHorizontal size={14} aria-hidden />
-              属性
+              {t('app.properties')}
             </button>
           </div>
 
@@ -370,7 +374,7 @@ export function AppShell(): JSX.Element {
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="调整详情面板宽度"
+              aria-label={t('app.detailResizeLabel')}
               tabIndex={0}
               className="resize-handle focus-ring"
               onPointerDown={resizeRight}
@@ -385,7 +389,7 @@ export function AppShell(): JSX.Element {
             <aside
               className="flex min-h-0 shrink-0 flex-col border-l"
               style={{ width: rightWidth, borderColor: 'var(--border)' }}
-              aria-label="节点详情"
+              aria-label={t('app.detailLabel')}
             >
               <DetailPanel />
             </aside>
@@ -405,9 +409,9 @@ export function AppShell(): JSX.Element {
 
       {confirmState ? (
         <ConfirmDialog
-          title="从库中移除"
+          title={t('app.removeDialogTitle')}
           message={confirmState.message}
-          confirmLabel="移除"
+          confirmLabel={t('app.removeConfirmLabel')}
           danger
           onConfirm={() => {
             confirmState.onConfirm()

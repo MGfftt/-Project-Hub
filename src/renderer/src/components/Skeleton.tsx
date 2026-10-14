@@ -1,3 +1,5 @@
+import { t } from '@renderer/lib/i18n'
+
 export interface SkeletonProps {
   /** Number of placeholder rows. */
   rows?: number
@@ -20,7 +22,7 @@ export function Skeleton({ rows = 3, variant = 'row', className }: SkeletonProps
       className={`flex flex-col gap-2 ${className ?? ''}`}
       role="status"
       aria-busy="true"
-      aria-label="加载中"
+      aria-label={t('tree.loading')}
     >
       {Array.from({ length: count }, (_, i) => {
         if (variant === 'line') {

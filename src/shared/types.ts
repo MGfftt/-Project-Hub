@@ -320,6 +320,8 @@ export const SETTING_KEYS = {
   clickToOpen: 'clickToOpen',
   compactMode: 'compactMode',
   theme: 'theme',
+  /** Interface language: 'zh' or 'en' (§9.10). */
+  language: 'language',
   firstHideTip: 'firstHideTip',
   autoLaunch: 'autoLaunch',
   pauseOnBattery: 'pauseOnBattery',
@@ -331,6 +333,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   [SETTING_KEYS.clickToOpen]: 'true',
   [SETTING_KEYS.compactMode]: 'false',
   [SETTING_KEYS.theme]: 'system',
+  [SETTING_KEYS.language]: 'zh',
   [SETTING_KEYS.firstHideTip]: '',
   [SETTING_KEYS.autoLaunch]: 'false',
   [SETTING_KEYS.pauseOnBattery]: 'true',

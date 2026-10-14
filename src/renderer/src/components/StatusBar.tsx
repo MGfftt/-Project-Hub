@@ -5,6 +5,7 @@ import { useUi } from '@renderer/stores/ui'
 import { useTree } from '@renderer/stores/tree'
 import { useEvents } from '@renderer/stores/events'
 import { formatCount } from '@renderer/lib/format'
+import { t } from '@renderer/lib/i18n'
 
 /* ---------------------------------------------------------------------------
  * StatusBar — §8.1 打开反馈, §9.6 扫描进度, §10.6 隐藏窗口, path_missing 警告.
@@ -92,12 +93,15 @@ export function StatusBar(): JSX.Element {
       .then((result) => {
         ui.setStatus(
           result.newEvents > 0
-            ? `已同步 ${formatCount(result.synced)} 个仓库，新增 ${formatCount(result.newEvents)} 条改动`
-            : `已同步 ${formatCount(result.synced)} 个仓库，没有新的改动`,
+            ? t('map.sync.done', {
+                synced: formatCount(result.synced),
+                events: formatCount(result.newEvents)
+              })
+            : t('map.sync.doneEmpty', { synced: formatCount(result.synced) }),
           'info'
         )
       })
-      .catch(() => ui.setStatus('同步 Git 历史失败，请稍后再试', 'error'))
+      .catch(() => ui.setStatus(t('map.sync.failed'), 'error'))
       .finally(() => setSyncing(false))
   }, [sync])
 
@@ -109,7 +113,7 @@ export function StatusBar(): JSX.Element {
     <footer
       className="flex min-h-[26px] flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-0.5 text-[12px] leading-5"
       style={{ borderColor: 'var(--border)', backgroundColor: 'var(--panel)', color: 'var(--text-dim)' }}
-      aria-label="状态栏"
+      aria-label={t('map.statusBar')}
     >
       {/* left: scan progress or the library summary */}
       {scanProgress ? (
@@ -123,7 +127,7 @@ export function StatusBar(): JSX.Element {
             <span className="skeleton absolute inset-y-0 left-0 w-1/2 rounded-full" />
           </span>
           <span className="truncate text-[var(--text)]">
-            已扫描 {formatCount(scanProgress.scanned)} 个
+            {t('map.scanning', { n: formatCount(scanProgress.scanned) })}
           </span>
           {scanProgress.current ? (
             <span className="max-w-[14rem] truncate" title={scanProgress.current}>
@@ -132,10 +136,14 @@ export function StatusBar(): JSX.Element {
           ) : null}
         </span>
       ) : (
-        <span className="truncate" title="根目录 · 节点 · 改动">
+        <span className="truncate" title={t('map.summary.title')}>
           {info
-            ? `${formatCount(info.roots)} 个根目录 · ${formatCount(info.nodes)} 个节点 · ${formatCount(info.events)} 条改动`
-            : '正在读取库信息…'}
+            ? t('map.summary', {
+                roots: formatCount(info.roots),
+                nodes: formatCount(info.nodes),
+                events: formatCount(info.events)
+              })
+            : t('map.summary.loading')}
         </span>
       )}
 
@@ -162,18 +170,27 @@ export function StatusBar(): JSX.Element {
           title={selected?.path ?? ''}
           role="alert"
         >
-          路径不存在
+          {t('map.pathMissing')}
         </span>
       ) : null}
 
       {hiddenCount > 0 ? (
-        <span title="窗口隐藏期间新增的改动">{formatCount(hiddenCount)} 条未读</span>
+        <span title={t('map.unread.title')}>
+          {t('map.unread', { n: formatCount(hiddenCount) })}
+        </span>
       ) : null}
 
-      {background?.onBattery ? <span title="当前由电池供电，后台维护已降速">电池供电，已降速</span> : null}
+      {background?.onBattery ? (
+        <span title={t('map.battery.title')}>{t('map.battery')}</span>
+      ) : null}
 
       <span title={nextRunTitle(background)}>
-        后台维护：{background ? (background.paused ? '已暂停' : '运行中') : '未知'}
+        {t('map.background')}
+        {background
+          ? background.paused
+            ? t('map.background.paused')
+            : t('map.background.running')
+          : t('map.background.unknown')}
       </span>
 
       <button
@@ -181,9 +198,9 @@ export function StatusBar(): JSX.Element {
         className="btn btn-ghost h-5 px-1.5 py-0 text-[12px]"
         onClick={onSync}
         disabled={syncing}
-        title="立即同步所有 Git 仓库"
+        title={t('map.sync.title')}
       >
-        {syncing ? '同步中…' : '立即同步 Git'}
+        {syncing ? t('map.syncing') : t('map.syncNow')}
       </button>
     </footer>
   )
@@ -191,13 +208,15 @@ export function StatusBar(): JSX.Element {
 
 /** 「后台维护」 tooltip: the nearest scheduled task, if any. */
 function nextRunTitle(background: BackgroundStatus | null): string {
-  if (!background) return '后台维护状态未知'
+  if (!background) return t('map.nextRun.unknown')
   const entries = Object.entries(background.nextRun ?? {})
     .filter(([, at]) => typeof at === 'number' && at > 0)
     .sort((a, b) => a[1] - b[1])
-  if (entries.length === 0) return background.paused ? '后台维护已暂停' : '暂无排定的维护任务'
+  if (entries.length === 0) {
+    return background.paused ? t('map.nextRun.paused') : t('map.nextRun.none')
+  }
   const [task, at] = entries[0]
-  return `下次维护：${task} · ${new Date(at).toLocaleString('zh-CN')}`
+  return t('map.nextRun.at', { task, at: new Date(at).toLocaleString('zh-CN') })
 }
 
 export default StatusBar

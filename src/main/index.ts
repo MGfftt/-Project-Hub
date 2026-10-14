@@ -32,6 +32,7 @@ import { registerAllTasks, syncAllGit, type TaskContext } from './background/tas
 import { addLogSink, createLogger, setLogLevel, type LogLevel } from './utils/logger'
 import { noteActivity } from './utils/power'
 import { createAppIcon, createTrayIcon } from './tray/icon'
+import { onLangChange, setLang, t } from './i18n'
 
 const log = createLogger('boot')
 
@@ -107,8 +108,10 @@ function pushTrayState(): void {
   const state = trayState()
   send(CH.broadcast.trayState, state)
   if (tray) {
-    const suffix = state.paused ? '（已暂停）' : ''
-    tray.setToolTip(`Project Hub${suffix}${state.unreadEvents > 0 ? ` · ${state.unreadEvents} 条新变更` : ''}`)
+    const suffix = state.paused ? t('tray.tooltipPaused') : ''
+    tray.setToolTip(
+      `Project Hub${suffix}${state.unreadEvents > 0 ? t('tray.tooltipEvents', { n: state.unreadEvents }) : ''}`
+    )
   }
 }
 
@@ -274,6 +277,12 @@ function buildTray(): void {
     if (!tray) return
     tray.setImage(createTrayIcon(nativeTheme.shouldUseDarkColors))
   })
+
+  // §9.10 — a language change made in the settings dialog relabels the menu.
+  onLangChange(() => {
+    pushTrayState()
+    refreshTrayMenu()
+  })
 }
 
 function refreshTrayMenu(): void {
@@ -281,11 +290,11 @@ function refreshTrayMenu(): void {
   const paused = scheduler?.isPaused() ?? false
   const state = trayState()
   const menu = Menu.buildFromTemplate([
-    { label: '显示 Project Hub', click: () => showWindow() },
-    { label: '隐藏窗口', click: () => mainWindow?.hide() },
+    { label: t('tray.show'), click: () => showWindow() },
+    { label: t('tray.hide'), click: () => mainWindow?.hide() },
     { type: 'separator' },
     {
-      label: paused ? '继续后台维护' : '暂停后台维护',
+      label: paused ? t('tray.resume') : t('tray.pause'),
       click: () => {
         const next = !(scheduler?.isPaused() ?? false)
         if (next) scheduler?.setPaused(true)
@@ -296,7 +305,7 @@ function refreshTrayMenu(): void {
       }
     },
     {
-      label: '立即同步 Git 历史',
+      label: t('tray.syncGit'),
       click: () => {
         void (async () => {
           try {
@@ -318,16 +327,16 @@ function refreshTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: `已索引 ${repo.counts().nodes} 个节点`,
+      label: t('tray.indexed', { n: repo.counts().nodes }),
       enabled: false
     },
     {
-      label: state.watching > 0 ? `文件监视：开启（${state.watching} 个根目录）` : '文件监视：关闭',
+      label: state.watching > 0 ? t('tray.watchingOn', { n: state.watching }) : t('tray.watchingOff'),
       enabled: false
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: t('tray.quit'),
       click: () => {
         isQuitting = true
         app.quit()
@@ -477,6 +486,8 @@ async function boot(): Promise<void> {
   ])
 
   const opened = initDatabase({ path: dbPath })
+  // §9.10 — read the language before anything that renders text is built.
+  setLang(settingString(SETTING_KEYS.language, 'zh'))
   log.info('database ready', {
     path: dbPath,
     driver: driverName,
@@ -599,7 +610,7 @@ if (gotLock) {
       // A boot failure that leaves no window is worse than a visible error, so
       // surface it instead of dying silently in the tray.
       const { dialog } = await import('electron')
-      dialog.showErrorBox('Project Hub 启动失败', String((err as Error).stack ?? err))
+      dialog.showErrorBox(t('app.bootFailed'), String((err as Error).stack ?? err))
       app.exit(1)
     }
   })

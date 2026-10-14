@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_SETTINGS, SETTING_KEYS } from '@shared/types'
+import { t } from '@renderer/lib/i18n'
 
 /* ---------------------------------------------------------------------------
  * settings.ts — a thin, cached mirror of the `settings` table.
@@ -36,7 +37,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       const values = await hub.settings.all()
       set({ values: { ...DEFAULT_SETTINGS, ...values }, loading: false, error: null })
     } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : '读取设置失败' })
+      set({ loading: false, error: err instanceof Error ? err.message : t('error.settingsLoad') })
     }
   },
 
@@ -47,7 +48,7 @@ export const useSettings = create<SettingsState>()((set, get) => ({
     try {
       await hub.settings.set(key, value)
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : '保存设置失败' })
+      set({ error: err instanceof Error ? err.message : t('error.settingsSave') })
     }
   },
 

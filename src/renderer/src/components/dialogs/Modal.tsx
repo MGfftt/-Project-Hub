@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { t } from '@renderer/lib/i18n'
 
 export interface ModalProps {
   title: string
@@ -79,8 +80,8 @@ export function Modal({ title, onClose, children, className, footer }: ModalProp
             type="button"
             className="btn btn-ghost ml-auto h-6 w-6 px-0 text-sm"
             onClick={onClose}
-            aria-label="关闭"
-            title="关闭（Esc）"
+            aria-label={t('settings.close')}
+            title={t('settings.closeHint')}
           >
             ✕
           </button>

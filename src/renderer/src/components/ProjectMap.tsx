@@ -7,6 +7,7 @@ import { useUi } from '@renderer/stores/ui'
 import NodeIcon from '@renderer/components/NodeIcon'
 import { descendantIds, kindLabel } from '@renderer/lib/tree'
 import { nodeColorValue, statusColor } from '@renderer/lib/colors'
+import { t, tCount } from '@renderer/lib/i18n'
 
 /* ---------------------------------------------------------------------------
  * ProjectMap — the whole library drawn as a tree, not described as text.
@@ -268,10 +269,10 @@ export function ProjectMap(): JSX.Element {
     void window.hub?.nodes
       .move(start.id, target, 0)
       .then(() => {
-        setStatus('已移动节点', 'info')
+        setStatus(t('map.moved'), 'info')
         return useTree.getState().load()
       })
-      .catch((err: unknown) => setStatus(`移动失败：${String(err)}`, 'error'))
+      .catch((err: unknown) => setStatus(t('map.moveFailed', { error: String(err) }), 'error'))
   }
 
   /* Escape abandons a drag that is already in flight. Registered once — the
@@ -291,10 +292,11 @@ export function ProjectMap(): JSX.Element {
     return (
       <div className="flex flex-1 items-center justify-center p-10">
         <div className="card max-w-[420px] p-6 text-center">
-          <div className="mb-2 text-[15px] font-medium">还没有任何项目</div>
+          <div className="mb-2 text-[15px] font-medium">{t('map.empty.title')}</div>
           <p className="text-[var(--font-minor)] leading-relaxed text-[var(--text-dim)]">
-            用左上角的「根目录」按钮添加一个文件夹，它就会作为一棵树出现在这里。
-            文件夹里有没有 Git 都可以 —— 之后再 <code>git init</code>，下一次扫描也会认出来。
+            {t('map.empty.hintLead')}
+            <code>git init</code>
+            {t('map.empty.hintTail')}
           </p>
         </div>
       </div>
@@ -311,13 +313,13 @@ export function ProjectMap(): JSX.Element {
     void window.hub?.nodes
       .createNote(selectedId, '')
       .then((id) => {
-        setStatus('已添加备注，写好内容后它会挂在这个节点下面', 'info')
+        setStatus(t('map.addNote.added'), 'info')
         return useTree.getState().load().then(() => {
           if (selectedId != null) useTree.getState().setOpen(selectedId, true)
           select(id)
         })
       })
-      .catch((err: unknown) => setStatus(`添加备注失败：${String(err)}`, 'error'))
+      .catch((err: unknown) => setStatus(t('map.addNote.failed', { error: String(err) }), 'error'))
   }
 
   return (
@@ -326,34 +328,42 @@ export function ProjectMap(): JSX.Element {
         className="flex shrink-0 flex-wrap items-center gap-3 border-b px-3 py-2 text-[var(--font-minor)] text-[var(--text-dim)]"
         style={{ borderColor: 'var(--border)' }}
       >
-        <Legend color={ACCENT.project} label="项目" count={projectCount} />
-        <Legend color={ACCENT.group} label="分组" count={groupCount} />
-        <Legend color={ACCENT.folder} label="目录" count={folderCount} />
-        {noteCount > 0 ? <Legend color={ACCENT.note} label="备注" count={noteCount} /> : null}
+        <Legend color={ACCENT.project} label={t('kind.project')} count={projectCount} />
+        <Legend color={ACCENT.group} label={t('kind.group')} count={groupCount} />
+        <Legend color={ACCENT.folder} label={t('kind.folder')} count={folderCount} />
+        {noteCount > 0 ? (
+          <Legend color={ACCENT.note} label={t('kind.note')} count={noteCount} />
+        ) : null}
         <span className="flex-1" />
         <button
           type="button"
           className="btn"
-          title={
-            selectedId == null
-              ? '先选一个节点，备注就会挂在它下面'
-              : '在当前选中的节点下添加一条备注'
-          }
+          title={selectedId == null ? t('map.addNote.selectFirst') : t('map.addNote.title')}
           onClick={addNote}
         >
           <StickyNote size={13} aria-hidden />
-          添加备注
+          {t('map.addNote')}
         </button>
-        <span className="hidden sm:inline">单击卡片查看，点箭头展开，拖动卡片可换父节点</span>
+        <span className="hidden sm:inline">{t('map.hint')}</span>
         <span className="flex items-center gap-1">
-          <button type="button" className="btn btn-ghost" title="缩小" onClick={() => zoom(-0.1)}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            title={t('map.zoomOut')}
+            onClick={() => zoom(-0.1)}
+          >
             <Minus size={13} aria-hidden />
           </button>
           <span className="w-10 text-center tabular-nums">{Math.round(scale * 100)}%</span>
-          <button type="button" className="btn btn-ghost" title="放大" onClick={() => zoom(0.1)}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            title={t('map.zoomIn')}
+            onClick={() => zoom(0.1)}
+          >
             <Plus size={13} aria-hidden />
           </button>
-          <button type="button" className="btn btn-ghost" title="适应宽度" onClick={fit}>
+          <button type="button" className="btn btn-ghost" title={t('map.fitWidth')} onClick={fit}>
             <Maximize2 size={13} aria-hidden />
           </button>
         </span>
@@ -452,7 +462,11 @@ export function ProjectMap(): JSX.Element {
                       onPointerDown={(e) => e.stopPropagation()}
                       className="focus-ring ml-0.5 -mr-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-[var(--hover)]"
                       aria-expanded={expanded}
-                      title={expanded ? '收起' : `展开（${children.length} 个子节点）`}
+                      title={
+                        expanded
+                          ? t('map.collapse')
+                          : tCount('map.expandOne', 'map.expand', children.length)
+                      }
                       onClick={(e) => {
                         e.stopPropagation()
                         toggleOpen(node.id)
@@ -475,8 +489,10 @@ export function ProjectMap(): JSX.Element {
                     title={
                       node.path ??
                       (node.kind === 'note'
-                        ? `备注：${String((node.meta?.text as string) ?? '') || '（空白）'}`
-                        : `${label}（虚拟分组）`)
+                        ? t('map.noteTooltip', {
+                            text: String((node.meta?.text as string) ?? '') || t('map.note.blank')
+                          })
+                        : t('map.groupTooltip', { name: label }))
                     }
                   >
                     <span
@@ -489,10 +505,11 @@ export function ProjectMap(): JSX.Element {
                       <span className="block truncate text-[12.5px] leading-4">{label}</span>
                       <span className="block truncate text-[10px] leading-3 text-[var(--text-dim)]">
                         {node.kind === 'note'
-                          ? String((node.meta?.text as string) ?? '').split(/\r?\n/)[0] || '空白备注'
+                          ? String((node.meta?.text as string) ?? '').split(/\r?\n/)[0] ||
+                            t('map.note.emptyText')
                           : kindLabel(node.kind)}
                         {node.kind !== 'note' && children.length > 0
-                          ? ` · ${children.length} 个子节点`
+                          ? ` · ${tCount('map.childCountOne', 'map.childCount', children.length)}`
                           : ''}
                       </span>
                     </span>
@@ -513,7 +530,7 @@ export function ProjectMap(): JSX.Element {
                       onPointerDown={(e) => e.stopPropagation()}
                       className="focus-ring -ml-1 shrink-0 rounded-full border px-1 text-[10px] leading-4 text-[var(--text-dim)]"
                       style={{ borderColor: 'var(--border)' }}
-                      title={`已收起 ${children.length} 个子节点`}
+                      title={tCount('map.collapsedCountOne', 'map.collapsedCount', children.length)}
                       onClick={(e) => {
                         e.stopPropagation()
                         setOpen(node.id, true)
@@ -558,10 +575,10 @@ export function ProjectMap(): JSX.Element {
                   }}
                 >
                   <span className="min-w-0 truncate text-[12px]">
-                    {dragged ? dragged.display_name || dragged.name : '节点'}
+                    {dragged ? dragged.display_name || dragged.name : t('map.node')}
                   </span>
                   <span className="shrink-0 text-[10px] text-[var(--text-dim)]">
-                    {ghost.over === null ? '拖到另一个节点上' : '松开即可移入'}
+                    {ghost.over === null ? t('map.ghost.drag') : t('map.ghost.release')}
                   </span>
                 </div>
               )

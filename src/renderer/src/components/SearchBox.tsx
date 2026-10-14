@@ -10,6 +10,8 @@ import { FileText, Folder, FolderTree, Tag } from 'lucide-react'
 import type { NodeKind, SearchHit, TreeNode } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
+import { t } from '@renderer/lib/i18n'
+import { kindLabel } from '@renderer/lib/tree'
 
 const DEBOUNCE_MS = 250
 const MAX_RESULTS = 30
@@ -31,19 +33,13 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-const MATCH_LABEL: Record<string, string> = {
-  display_name: '显示名',
-  name: '名称',
-  path: '路径',
-  tag: '标签',
-  note: '备注'
-}
-
-const KIND_LABEL: Record<NodeKind, string> = {
-  group: '分组',
-  project: '项目',
-  folder: '文件夹',
-  note: '备注'
+/** Which field the hit matched on, as a message key. */
+const MATCH_LABEL_KEY: Record<string, string> = {
+  display_name: 'search.match.displayName',
+  name: 'search.match.name',
+  path: 'search.match.path',
+  tag: 'search.match.tag',
+  note: 'search.match.note'
 }
 
 function labelOf(hit: SearchHit): string {
@@ -253,8 +249,8 @@ export default function SearchBox() {
         aria-autocomplete="list"
         autoComplete="off"
         value={query}
-        placeholder="搜索项目…"
-        aria-label="搜索项目"
+        placeholder={t('search.placeholder')}
+        aria-label={t('search.label')}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => {
           if (query.trim() && hits.length > 0) setOpen(true)
@@ -267,12 +263,12 @@ export default function SearchBox() {
         <div
           id="hub-search-results"
           role="listbox"
-          aria-label="搜索结果"
+          aria-label={t('search.results')}
           className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto rounded-md border border-[var(--border)] bg-[var(--panel)] shadow-lg"
         >
           {visible.length === 0 ? (
             <p className="px-3 py-2 text-xs text-[var(--text-dim)]">
-              {loading ? '搜索中…' : '没有匹配的项目'}
+              {loading ? t('search.searching') : t('search.empty')}
             </p>
           ) : (
             <ul className="divide-y divide-[var(--border)]/50">
@@ -296,7 +292,9 @@ export default function SearchBox() {
                         </span>
                         <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--accent)]/15 px-1.5 text-[10px] text-[var(--accent)]">
                           {hit.matchedOn === 'tag' ? <Tag className="h-2.5 w-2.5" aria-hidden /> : null}
-                          {MATCH_LABEL[hit.matchedOn] ?? hit.matchedOn}
+                          {MATCH_LABEL_KEY[hit.matchedOn]
+                            ? t(MATCH_LABEL_KEY[hit.matchedOn])
+                            : hit.matchedOn}
                         </span>
                       </span>
                       {hit.path ? (
@@ -309,7 +307,7 @@ export default function SearchBox() {
                           <Snippet text={hit.snippet} query={query} />
                         </span>
                       ) : null}
-                      <span className="sr-only">{KIND_LABEL[hit.kind]}</span>
+                      <span className="sr-only">{kindLabel(hit.kind)}</span>
                     </button>
                   </li>
                 )

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Tree, type NodeApi, type NodeRendererProps, type TreeApi } from 'react-arborist'
 import type { TreeNode } from '@shared/types'
 import { NodeRow } from '@renderer/components/NodeRow'
+import { t } from '@renderer/lib/i18n'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 
@@ -105,7 +106,7 @@ export function NodeTree({
     // Groups and notes are virtual: there is no directory to open.
     if (!node.path) return
     void window.hub.shell.openFolder(node.id).catch((err: unknown) => {
-      useUi.getState().setStatus(`打开失败：${String(err)}`, 'error')
+      useUi.getState().setStatus(t('tree.openFailed', { error: String(err) }), 'error')
     })
   }, [])
 
@@ -235,7 +236,7 @@ export function NodeTree({
       const dragged = args.dragNodes[0]
       if (!dragged) return
       if (isDescendant(dragged, args.parentNode)) {
-        useUi.getState().setStatus('不能把节点移动到它自己的子节点中', 'warn')
+        useUi.getState().setStatus(t('tree.moveIntoSelf'), 'warn')
         // arborist already moved its own copy of the data; reload to undo it.
         void useTree.getState().load()
         return
@@ -244,11 +245,11 @@ export function NodeTree({
       void window.hub.nodes
         .move(Number(dragged.id), parentId, args.index)
         .then(() => {
-          useUi.getState().setStatus('已移动节点', 'info')
+          useUi.getState().setStatus(t('tree.nodeMoved'), 'info')
           return useTree.getState().load()
         })
         .catch((err: unknown) => {
-          useUi.getState().setStatus(`移动失败：${String(err)}`, 'error')
+          useUi.getState().setStatus(t('tree.moveFailed', { error: String(err) }), 'error')
           void useTree.getState().load()
         })
     },
@@ -311,7 +312,7 @@ export function NodeTree({
   if (error) {
     return (
       <div className="p-3 text-[var(--font-minor)] text-[var(--tone-error)]" role="alert">
-        项目树加载失败：{error}
+        {t('tree.loadFailed', { error })}
       </div>
     )
   }
@@ -343,7 +344,7 @@ export function NodeTree({
           disableMultiSelection
           selection={selectedId == null ? undefined : String(selectedId)}
           initialOpenState={arboristOpen}
-          aria-label="项目树"
+          aria-label={t('tree.treeLabel')}
           onMove={handleMove}
           onSelect={(selection) => {
             const first = selection[0]
@@ -367,7 +368,7 @@ export function NodeTree({
               .setDisplayName(id, value || null)
               .then(() => useTree.getState().load())
               .catch((err: unknown) => {
-                useUi.getState().setStatus(`重命名失败：${String(err)}`, 'error')
+                useUi.getState().setStatus(t('tree.renameFailed', { error: String(err) }), 'error')
               })
           }}
         >

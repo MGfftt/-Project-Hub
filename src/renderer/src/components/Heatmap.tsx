@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { DayCount } from '@shared/types'
 import { useEvents } from '@renderer/stores/events'
 import { useUi } from '@renderer/stores/ui'
+import { t, tCount } from '@renderer/lib/i18n'
 
 const COLS = 53
 const ROWS = 7
@@ -17,8 +18,21 @@ const CELL = 12
 const GAP = 2
 const STEP = CELL + GAP
 const DAY_MS = 86_400_000
-const WEEKDAYS = ['一', '三', '五'] as const
-const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'] as const
+const WEEKDAY_KEYS = ['map.weekday.mon', 'map.weekday.wed', 'map.weekday.fri'] as const
+const MONTH_KEYS = [
+  'map.month.jan',
+  'map.month.feb',
+  'map.month.mar',
+  'map.month.apr',
+  'map.month.may',
+  'map.month.jun',
+  'map.month.jul',
+  'map.month.aug',
+  'map.month.sep',
+  'map.month.oct',
+  'map.month.nov',
+  'map.month.dec'
+] as const
 
 export interface HeatmapProps {
   /** Inclusive range start (ms). Defaults to Jan 1 of the shown year. */
@@ -75,8 +89,13 @@ function cellBackground(level: number): string {
 }
 
 function cellTitle(day: string, entry: DayCount | undefined): string {
-  if (!entry || entry.count <= 0) return `${day} · 0 次改动`
-  return `${day} · ${entry.count} 次改动 · +${entry.insertions} / -${entry.deletions}`
+  if (!entry || entry.count <= 0) return t('map.heatmap.cellEmpty', { day })
+  return t('map.heatmap.cell', {
+    day,
+    n: entry.count,
+    ins: entry.insertions,
+    del: entry.deletions
+  })
 }
 
 /* ------------------------------------------------------------------ */
@@ -160,24 +179,24 @@ export default function Heatmap({ from, to }: HeatmapProps) {
   const columns = useMemo(() => {
     const cols: Array<{
       key: string
-      label: string
+      labelKey: string
       /** px offset of the month tick, or null when this column repeats it. */
       labelLeft: number | null
       cells: Array<{ day: string; inYear: boolean }>
     }> = []
-    let lastLabel = ''
+    let lastLabelKey = ''
     for (let col = 0; col < COLS; col += 1) {
       const cells: Array<{ day: string; inYear: boolean }> = []
-      let label = ''
+      let labelKey = ''
       for (let row = 0; row < ROWS; row += 1) {
         const d = cellDate(origin, col, row)
         const inYear = d.getFullYear() === year
-        if (row === 0) label = MONTHS[d.getMonth()]
+        if (row === 0) labelKey = MONTH_KEYS[d.getMonth()]
         cells.push({ day: dayKey(d), inYear })
       }
-      const labelLeft = label !== lastLabel ? col * STEP : null
-      lastLabel = label
-      cols.push({ key: `col-${col}`, label, labelLeft, cells })
+      const labelLeft = labelKey !== lastLabelKey ? col * STEP : null
+      lastLabelKey = labelKey
+      cols.push({ key: `col-${col}`, labelKey, labelLeft, cells })
     }
     return cols
   }, [origin, year])
@@ -208,10 +227,13 @@ export default function Heatmap({ from, to }: HeatmapProps) {
   const gridHeight = ROWS * STEP
 
   return (
-    <section className="inline-flex flex-col gap-2 text-[var(--text)]" aria-label="改动热力图">
+    <section
+      className="inline-flex flex-col gap-2 text-[var(--text)]"
+      aria-label={t('map.heatmap.label')}
+    >
       <header className="flex items-center gap-2">
         {showYearSelector ? (
-          <div className="flex items-center gap-1" role="group" aria-label="年份">
+          <div className="flex items-center gap-1" role="group" aria-label={t('map.heatmap.year')}>
             {years.map((y) => (
               <button
                 key={y}
@@ -230,7 +252,7 @@ export default function Heatmap({ from, to }: HeatmapProps) {
           </div>
         ) : null}
         <span className="ml-auto text-[11px] text-[var(--text-dim)]">
-          {empty ? '该时间段暂无改动' : `${totalCount} 次改动`}
+          {empty ? t('map.heatmap.empty') : tCount('map.heatmap.totalOne', 'map.heatmap.total', totalCount)}
         </span>
       </header>
 
@@ -243,7 +265,13 @@ export default function Heatmap({ from, to }: HeatmapProps) {
               className="flex items-center"
               style={{ height: CELL, marginBottom: GAP, fontSize: 9 }}
             >
-              {row === 1 ? WEEKDAYS[0] : row === 3 ? WEEKDAYS[1] : row === 5 ? WEEKDAYS[2] : ''}
+              {row === 1
+                ? t(WEEKDAY_KEYS[0])
+                : row === 3
+                  ? t(WEEKDAY_KEYS[1])
+                  : row === 5
+                    ? t(WEEKDAY_KEYS[2])
+                    : ''}
             </span>
           ))}
         </div>
@@ -258,7 +286,7 @@ export default function Heatmap({ from, to }: HeatmapProps) {
                   className="absolute top-0 text-[10px] leading-none text-[var(--text-dim)]"
                   style={{ left: col.labelLeft }}
                 >
-                  {col.label}
+                  {t(col.labelKey)}
                 </span>
               )
             )}
@@ -269,14 +297,14 @@ export default function Heatmap({ from, to }: HeatmapProps) {
               className="grid place-items-center rounded-md border border-dashed border-[var(--border)] text-[11px] text-[var(--text-dim)]"
               style={{ width: gridWidth, height: gridHeight }}
             >
-              该时间段暂无改动
+              {t('map.heatmap.empty')}
             </p>
           ) : (
             <div
               className="flex"
               style={{ width: gridWidth, height: gridHeight }}
               role="grid"
-              aria-label={`${year} 年改动热力图`}
+              aria-label={t('map.heatmap.gridLabel', { year })}
             >
               {columns.map((col) => (
                 <div key={col.key} className="flex flex-col" role="rowgroup">
@@ -298,7 +326,7 @@ export default function Heatmap({ from, to }: HeatmapProps) {
       </div>
 
       <footer className="flex items-center gap-2 pl-6 text-[10px] text-[var(--text-dim)]">
-        <span>少</span>
+        <span>{t('map.heatmap.less')}</span>
         {LEVELS.map((_, level) => (
           <span
             key={level}
@@ -307,7 +335,7 @@ export default function Heatmap({ from, to }: HeatmapProps) {
             aria-hidden
           />
         ))}
-        <span>多</span>
+        <span>{t('map.heatmap.more')}</span>
       </footer>
     </section>
   )

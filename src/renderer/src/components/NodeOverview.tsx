@@ -21,6 +21,7 @@ import {
   formatDelta,
   formatRelativeTime
 } from '@renderer/lib/format'
+import { t } from '@renderer/lib/i18n'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 
@@ -101,8 +102,8 @@ function MemberBranch({
             <button
               type="button"
               className="focus-ring grid h-4 w-4 shrink-0 place-items-center rounded text-[var(--text-dim)]"
-              title={open ? '折叠这一支' : '展开这一支'}
-              aria-label={open ? '折叠这一支' : '展开这一支'}
+              title={open ? t('detail.collapseBranch') : t('detail.expandBranch')}
+              aria-label={open ? t('detail.collapseBranch') : t('detail.expandBranch')}
               aria-expanded={open}
               onClick={(event) => {
                 event.stopPropagation()
@@ -241,24 +242,26 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
     void window.hub?.nodes
       .setDisplayName(node.id, value || null)
       .then(() => {
-        setStatus(value ? `已重命名为「${value}」` : '已恢复磁盘目录名', 'info')
+        setStatus(value ? t('detail.renamed', { name: value }) : t('detail.renameReset'), 'info')
         return useTree.getState().load()
       })
       .catch(() => undefined)
   }
 
   function addChildGroup(): void {
-    const name = `新分组 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+    const name = t('detail.newGroupName', {
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    })
     void window.hub?.nodes
       .createGroup(name, node.id)
       .then((id) => {
-        setStatus(`已创建「${name}」`, 'info')
+        setStatus(t('detail.groupCreated', { name }), 'info')
         return useTree.getState().load().then(() => {
           useTree.getState().setOpen(node.id, true)
           select(id)
         })
       })
-      .catch((err: unknown) => setStatus(`新建分组失败：${String(err)}`, 'error'))
+      .catch((err: unknown) => setStatus(t('detail.groupCreateFailed', { error: String(err) }), 'error'))
   }
 
   /** Notes hang off any node; they are how the map gets annotated. */
@@ -266,13 +269,13 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
     void window.hub?.nodes
       .createNote(node.id, '')
       .then((id) => {
-        setStatus('已添加备注，在中间栏直接写内容即可', 'info')
+        setStatus(t('detail.noteAdded'), 'info')
         return useTree.getState().load().then(() => {
           useTree.getState().setOpen(node.id, true)
           select(id)
         })
       })
-      .catch((err: unknown) => setStatus(`添加备注失败：${String(err)}`, 'error'))
+      .catch((err: unknown) => setStatus(t('detail.noteAddFailed', { error: String(err) }), 'error'))
   }
 
   return (
@@ -291,7 +294,7 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
                 className="input h-7 max-w-[24rem] text-sm"
                 value={draft}
                 maxLength={64}
-                aria-label="重命名显示名称"
+                aria-label={t('detail.renameDisplayName')}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commitRename}
                 onKeyDown={(e) => {
@@ -314,9 +317,11 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[var(--font-minor)] text-[var(--text-dim)]">
               <span className="tag bg-[var(--hover)]">{kindLabel(live.kind)}</span>
               <span className="tag bg-[var(--hover)]">{statusLabel(live.status)}</span>
-              {live.display_name ? <span className="truncate">磁盘名：{live.name}</span> : null}
+              {live.display_name ? (
+                <span className="truncate">{t('detail.diskName', { name: live.name })}</span>
+              ) : null}
               {live.path_missing === 1 ? (
-                <span className="tag tag-warn">路径不存在</span>
+                <span className="tag tag-warn">{t('detail.pathMissing')}</span>
               ) : null}
             </div>
           </div>
@@ -324,9 +329,7 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
 
         <p className="truncate text-xs text-[var(--text-dim)]" title={live.path ?? undefined}>
           {live.path ??
-            (isNote
-              ? '备注节点（只保存在本地数据库里，不指向磁盘文件）'
-              : '虚拟分组（没有对应的磁盘目录，只用来归类其它节点）')}
+            (isNote ? t('detail.noteNodePath') : t('detail.virtualGroupPath'))}
         </p>
 
         {/* --- note body ---------------------------------------------------- */}
@@ -334,15 +337,19 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
           <section>
             <h2 className="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
               <StickyNote size={14} aria-hidden />
-              备注内容
+              {t('detail.noteBody')}
               <span className="text-[var(--font-minor)] text-[var(--text-dim)]">
-                {noteState === 'saving' ? '保存中…' : noteState === 'saved' ? '已保存' : '自动保存'}
+                {noteState === 'saving'
+                  ? t('detail.saving')
+                  : noteState === 'saved'
+                    ? t('detail.saved')
+                    : t('detail.autosave')}
               </span>
             </h2>
             <textarea
               className="input h-40 w-full resize-y font-mono text-xs leading-relaxed"
-              aria-label="备注内容"
-              placeholder="写点什么：这个项目是做什么的、下一步做什么、为什么先放下…"
+              aria-label={t('detail.noteBody')}
+              placeholder={t('detail.noteEmptyPlaceholder')}
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               onBlur={() => {
@@ -364,18 +371,20 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
             type="button"
             className="btn btn-primary"
             disabled={!live.path || live.path_missing === 1}
-            title={!live.path ? '该节点没有对应的磁盘目录' : '在系统文件管理器中打开'}
+            title={
+              !live.path ? t('detail.noDiskFolder') : t('detail.openInFileManager')
+            }
             onClick={() => {
               void window.hub?.shell
                 .openFolder(node.id)
                 .then((res) => {
-                  if (!res.ok) setStatus(res.error ?? '打开文件夹失败', 'error')
+                  if (!res.ok) setStatus(res.error ?? t('detail.openFolderFailed'), 'error')
                 })
-                .catch(() => setStatus('打开文件夹失败', 'error'))
+                .catch(() => setStatus(t('detail.openFolderFailed'), 'error'))
             }}
           >
             <FolderOpen size={14} aria-hidden />
-            打开目录
+            {t('detail.openFolder')}
           </button>
           <button
             type="button"
@@ -384,7 +393,7 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
             onClick={() => void window.hub?.shell.revealFolder(node.id).catch(() => undefined)}
           >
             <ExternalLink size={14} aria-hidden />
-            在文件夹中显示
+            {t('detail.showInFolder')}
           </button>
           <button
             type="button"
@@ -393,12 +402,12 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
             onClick={() =>
               void window.hub?.shell
                 .copyPath(node.id)
-                .then(() => setStatus('路径已复制', 'info'))
+                .then(() => setStatus(t('detail.pathCopiedHere'), 'info'))
                 .catch(() => undefined)
             }
           >
             <LinkIcon size={14} aria-hidden />
-            复制路径
+            {t('detail.copyPath')}
           </button>
           <button
             type="button"
@@ -409,67 +418,81 @@ export function NodeOverview({ node }: NodeOverviewProps): JSX.Element {
             }}
           >
             <Pencil size={14} aria-hidden />
-            重命名
+            {t('detail.rename')}
           </button>
           {live.kind === 'group' ? (
             <button type="button" className="btn" onClick={addChildGroup}>
               <FolderTree size={14} aria-hidden />
-              新建子分组
+              {t('detail.newSubgroup')}
             </button>
           ) : null}
           <button
             type="button"
             className="btn"
-            title="在这个节点下挂一条备注"
+            title={t('detail.addNoteHint')}
             onClick={addChildNote}
           >
             <StickyNote size={14} aria-hidden />
-            添加备注
+            {t('detail.addNote')}
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => openDialog('stats', node.id)}>
             <BarChart3 size={14} aria-hidden />
-            统计
+            {t('detail.stats')}
           </button>
         </div>
       </header>
 
       {/* --- numbers ------------------------------------------------------- */}
       <section className="grid grid-cols-2 gap-3 border-b p-4 sm:grid-cols-4" style={{ borderColor: 'var(--border)' }}>
-        <Stat label="子节点" value={formatCount(children.length)} />
-        <Stat label="文件数" value={formatCount(stats?.fileCount ?? null)} hint="磁盘扫描统计" />
+        <Stat label={t('detail.children')} value={formatCount(children.length)} />
         <Stat
-          label="占用空间"
-          value={stats ? formatBytes(stats.diskSizeBytes) : '统计中…'}
-          hint="磁盘占用由后台任务计算"
+          label={t('detail.fileCount')}
+          value={formatCount(stats?.fileCount ?? null)}
+          hint={t('detail.diskScanHint')}
         />
-        <Stat label="改动次数" value={formatCount(stats?.eventCount ?? null)} />
         <Stat
-          label="最近改动"
+          label={t('detail.diskUsage')}
+          value={stats ? formatBytes(stats.diskSizeBytes) : t('detail.counting')}
+          hint={t('detail.diskUsageHint')}
+        />
+        <Stat label={t('detail.eventCount')} value={formatCount(stats?.eventCount ?? null)} />
+        <Stat
+          label={t('detail.lastChange')}
           value={formatRelativeTime(stats?.lastEventAt ?? live.updated_at)}
           hint={stats?.lastEventAt ? formatDateTime(stats.lastEventAt) : undefined}
         />
-        <Stat label="累计变更" value={formatDelta(stats?.totalInsertions, stats?.totalDeletions)} />
-        <Stat label="Git 分支" value={stats?.gitBranch || '—'} hint={stats?.gitRemote ?? undefined} />
-        <Stat label="加入时间" value={formatDateTime(live.created_at)} />
+        <Stat
+          label={t('detail.totalChanges')}
+          value={formatDelta(stats?.totalInsertions, stats?.totalDeletions)}
+        />
+        <Stat
+          label={t('detail.gitBranchStat')}
+          value={stats?.gitBranch || '—'}
+          hint={stats?.gitRemote ?? undefined}
+        />
+        <Stat label={t('detail.addedAt')} value={formatDateTime(live.created_at)} />
       </section>
 
       {/* --- members ------------------------------------------------------- */}
       <section className="flex min-h-0 flex-1 flex-col p-4">
         <h2 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
           <Layers size={14} aria-hidden />
-          {live.kind === 'group' ? '分组内容' : '子节点'}
+          {live.kind === 'group' ? t('detail.groupContents') : t('detail.children')}
           <span className="text-[var(--font-minor)] text-[var(--text-dim)]">
             {/* The list below is the whole subtree, so a two-level folder must
                 not read as "1" next to two visible rows. */}
-            （{children.length === memberTotal ? children.length : `${children.length} 直接 · 共 ${memberTotal}`}）
+            {children.length === memberTotal
+              ? t('detail.memberCountOnly', { n: children.length })
+              : t('detail.memberCountDirect', {
+                  direct: children.length,
+                  total: memberTotal
+                })}
           </span>
         </h2>
 
         {children.length === 0 ? (
           <p className="text-xs text-[var(--text-dim)]">
-            {live.kind === 'group'
-              ? '这个分组还是空的。把项目树里的节点拖到分组上方，就会归入这里。'
-              : '没有子节点。'}
+            {live.kind === 'group' ? t('detail.groupEmpty') : t('detail.noChildren')}
           </p>
         ) : (
           <ul className="flex flex-col overflow-y-auto">

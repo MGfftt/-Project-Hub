@@ -9,8 +9,9 @@ import {
   formatNoteLength,
   formatRelativeTime
 } from '@renderer/lib/format'
-import { kindLabel } from '@renderer/lib/tree'
+import { kindLabel, statusLabel } from '@renderer/lib/tree'
 import { tagStyle } from '@renderer/lib/colors'
+import { t } from '@renderer/lib/i18n'
 import { useUi } from '@renderer/stores/ui'
 import Modal from '@renderer/components/dialogs/Modal'
 
@@ -39,7 +40,7 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
     setError(null)
     const hub = window.hub
     if (!hub) {
-      setError('window.hub 不可用')
+      setError(t('detail.hubUnavailable'))
       return
     }
     void Promise.all([hub.nodes.stats(nodeId), hub.nodes.detail(nodeId)])
@@ -49,7 +50,7 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
         setDetail(nextDetail)
       })
       .catch((err: unknown) => {
-        if (alive) setError(err instanceof Error ? err.message : '读取属性失败')
+        if (alive) setError(err instanceof Error ? err.message : t('detail.statsLoadFailed'))
       })
     return () => {
       alive = false
@@ -63,31 +64,31 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
     void hub.shell
       .copyPath(nodeId)
       .then(() => {
-        setCopyHint('已复制')
-        setStatus('已复制路径', 'info')
+        setCopyHint(t('detail.copied'))
+        setStatus(t('detail.pathCopied'), 'info')
         window.setTimeout(() => setCopyHint(null), 2000)
       })
-      .catch(() => setStatus('复制路径失败', 'error'))
+      .catch(() => setStatus(t('detail.pathCopyFailed'), 'error'))
   }
 
   return (
     <Modal
-      title="属性"
+      title={t('detail.statsTitle')}
       onClose={onClose}
       className="max-w-2xl"
       footer={
         <button type="button" className="btn btn-primary" onClick={onClose}>
-          关闭
+          {t('detail.close')}
         </button>
       }
     >
       {error ? <p className="text-xs text-[var(--tone-error)]">{error}</p> : null}
 
-      <Group title="基本">
-        <Row label="名称" value={stats?.name ?? detail?.name ?? '…'} />
-        <Row label="显示名" value={stats?.displayName ?? detail?.display_name ?? '—'} />
+      <Group title={t('detail.basic')}>
+        <Row label={t('detail.name')} value={stats?.name ?? detail?.name ?? '…'} />
+        <Row label={t('detail.displayName')} value={stats?.displayName ?? detail?.display_name ?? '—'} />
         <Row
-          label="路径"
+          label={t('detail.path')}
           value={
             <span className="flex items-center gap-2">
               <span className="min-w-0 break-all font-mono text-[11px]" title={path ?? ''}>
@@ -95,56 +96,74 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
               </span>
               {path ? (
                 <button type="button" className="btn h-5 shrink-0 px-1.5 py-0 text-[11px]" onClick={onCopy}>
-                  复制
+                  {t('detail.copy')}
                 </button>
               ) : null}
               {copyHint ? <span className="text-[11px] text-[var(--accent)]">{copyHint}</span> : null}
             </span>
           }
         />
-        <Row label="类型" value={stats ? kindLabel(stats.kind) : '…'} />
-        <Row label="状态" value={stats ? nodeStatusLabel(stats.status) : '…'} />
+        <Row label={t('detail.type')} value={stats ? kindLabel(stats.kind) : '…'} />
+        <Row label={t('detail.status')} value={stats ? nodeStatusLabel(stats.status) : '…'} />
       </Group>
 
-      <Group title="磁盘">
+      <Group title={t('detail.disk')}>
         <Row
-          label="大小"
+          label={t('detail.size')}
           value={
             stats === null || stats.diskSizeBytes === null
-              ? '计算中…'
+              ? t('detail.computing')
               : formatBytes(stats.diskSizeBytes)
           }
         />
         <Row
-          label="文件数"
-          value={stats === null || stats.fileCount === null ? '计算中…' : formatCount(stats.fileCount)}
+          label={t('detail.fileCount')}
+          value={
+            stats === null || stats.fileCount === null
+              ? t('detail.computing')
+              : formatCount(stats.fileCount)
+          }
         />
-        <Row label="子节点数" value={stats ? formatCount(stats.childCount) : '…'} />
-        <Row label="创建时间" value={formatDateTime(stats?.createdAt ?? null)} />
-        <Row label="修改时间" value={formatDateTime(stats?.modifiedAt ?? null)} />
+        <Row
+          label={t('detail.childCount')}
+          value={stats ? formatCount(stats.childCount) : '…'}
+        />
+        <Row label={t('detail.createdAt')} value={formatDateTime(stats?.createdAt ?? null)} />
+        <Row label={t('detail.modifiedAt')} value={formatDateTime(stats?.modifiedAt ?? null)} />
       </Group>
 
       <Group title="Git">
-        <Row label="是否仓库" value={stats ? (stats.isGitRepo ? '是' : '否') : '…'} />
-        <Row label="远程" value={stats?.gitRemote || '—'} />
-        <Row label="分支" value={stats?.gitBranch || '—'} />
+        <Row
+          label={t('detail.isRepo')}
+          value={stats ? (stats.isGitRepo ? t('detail.yes') : t('detail.no')) : '…'}
+        />
+        <Row label={t('detail.gitRemote')} value={stats?.gitRemote || '—'} />
+        <Row label={t('detail.gitBranch')} value={stats?.gitBranch || '—'} />
       </Group>
 
-      <Group title="改动">
-        <Row label="首次事件" value={formatDateTime(stats?.firstEventAt ?? null)} />
-        <Row label="末次事件" value={formatDateTime(stats?.lastEventAt ?? null)} />
+      <Group title={t('detail.changes')}>
+        <Row label={t('detail.firstEvent')} value={formatDateTime(stats?.firstEventAt ?? null)} />
+        <Row label={t('detail.lastEvent')} value={formatDateTime(stats?.lastEventAt ?? null)} />
         <Row
-          label="事件总数"
+          label={t('detail.eventTotal')}
           value={
-            stats ? `${formatCount(stats.eventCount)}（最近 ${formatRelativeTime(stats.lastEventAt)}）` : '…'
+            stats
+              ? t('detail.eventTotalValue', {
+                  count: formatCount(stats.eventCount),
+                  relative: formatRelativeTime(stats.lastEventAt)
+                })
+              : '…'
           }
         />
-        <Row label="累计增删" value={stats ? formatDelta(stats.totalInsertions, stats.totalDeletions) : '…'} />
+        <Row
+          label={t('detail.totalDelta')}
+          value={stats ? formatDelta(stats.totalInsertions, stats.totalDeletions) : '…'}
+        />
       </Group>
 
-      <Group title="标注">
+      <Group title={t('detail.annotations')}>
         <Row
-          label="标签"
+          label={t('detail.tags')}
           value={
             stats && stats.tags.length > 0 ? (
               <span className="flex flex-wrap gap-1">
@@ -159,7 +178,7 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
             )
           }
         />
-        <Row label="笔记字数" value={formatNoteLength(detail?.note_md ?? '')} />
+        <Row label={t('detail.noteLength')} value={formatNoteLength(detail?.note_md ?? '')} />
       </Group>
     </Modal>
   )
@@ -169,13 +188,10 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
 function nodeStatusLabel(status: string): string {
   switch (status) {
     case 'active':
-      return '活跃'
     case 'paused':
-      return '暂停'
     case 'done':
-      return '已完成'
     case 'archived':
-      return '已归档'
+      return statusLabel(status)
     default:
       return status || '—'
   }

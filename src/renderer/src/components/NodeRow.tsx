@@ -5,6 +5,7 @@ import type { TreeNode } from '@shared/types'
 import { NodeIcon } from '@renderer/components/NodeIcon'
 import { nodeColorLabel, nodeColorValue, tagStyle, tint } from '@renderer/lib/colors'
 import { formatRelativeTime } from '@renderer/lib/format'
+import { t } from '@renderer/lib/i18n'
 import { useTree } from '@renderer/stores/tree'
 
 /* ---------------------------------------------------------------------------
@@ -39,9 +40,6 @@ export interface NodeRowProps {
   onActivate?: (source: 'click' | 'key') => void
 }
 
-/** §8.3 — the frozen inline-rename hint. */
-export const RENAME_HINT = '仅在本程序中显示，不会修改磁盘目录名'
-
 /** At most this many tag pills are shown; the rest collapse into `+N` (§9.2). */
 const MAX_VISIBLE_TAGS = 3
 
@@ -65,7 +63,7 @@ function Expander({
   return (
     <span
       role="button"
-      aria-label={open ? '折叠' : '展开'}
+      aria-label={open ? t('tree.collapse') : t('tree.expand')}
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation()
@@ -122,9 +120,10 @@ export const NodeRow = memo(function NodeRow({
   const title = useMemo(() => {
     const parts = [data.display_name || data.name]
     if (data.path) parts.push(data.path)
-    else if (data.kind === 'note') parts.push(String((data.meta?.text as string) ?? '') || '空白备注')
-    else if (isVirtualGroup) parts.push('虚拟分组（无磁盘目录）')
-    parts.push(data.kind === 'note' ? '单击查看 · 双击展开或折叠' : '单击查看 · 双击展开或打开目录')
+    else if (data.kind === 'note') {
+      parts.push(String((data.meta?.text as string) ?? '') || t('tree.emptyNote'))
+    } else if (isVirtualGroup) parts.push(t('tree.virtualGroupNoPath'))
+    parts.push(data.kind === 'note' ? t('tree.clickHintNote') : t('tree.clickHintFolder'))
     return parts.join('\n')
   }, [data.display_name, data.name, data.path, data.kind, data.meta, isVirtualGroup])
 
@@ -224,7 +223,7 @@ export const NodeRow = memo(function NodeRow({
         style={
           accent === null ? undefined : { background: tint(accent, 0.18), color: accent }
         }
-        title={accentLabel === null ? undefined : `颜色：${accentLabel}`}
+        title={accentLabel === null ? undefined : t('tree.colorLabel', { color: accentLabel })}
       >
         <NodeIcon node={data} size={16} withStatus />
       </span>
@@ -235,8 +234,8 @@ export const NodeRow = memo(function NodeRow({
           className="input h-6 flex-1 py-0 text-[var(--font-main)]"
           value={draft}
           maxLength={DISPLAY_NAME_MAX}
-          title={RENAME_HINT}
-          aria-label="重命名显示名称"
+          title={t('tree.renameHint')}
+          aria-label={t('tree.renameFieldLabel')}
           onChange={(e) => setDraft(e.target.value)}
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
@@ -270,16 +269,16 @@ export const NodeRow = memo(function NodeRow({
       {!node.isOpen && childCount > 0 ? (
         <span
           className="shrink-0 rounded-full bg-[var(--hover)] px-1.5 text-[10px] leading-4 text-[var(--text-dim)]"
-          title={`${childCount} 个直接子节点，展开即可看到`}
+          title={t('tree.childCount', { n: childCount })}
         >
           {childCount}
         </span>
       ) : null}
 
       {data.status === 'paused' ? (
-        <span className="tag tag-warn shrink-0">已暂停</span>
+        <span className="tag tag-warn shrink-0">{t('status.paused')}</span>
       ) : data.status === 'done' ? (
-        <span className="tag tag-ok shrink-0">已完成</span>
+        <span className="tag tag-ok shrink-0">{t('status.done')}</span>
       ) : null}
 
       {tags.shown.map((tag) => (
@@ -296,7 +295,7 @@ export const NodeRow = memo(function NodeRow({
       {/* §9.2 — tags, then the relative time at the row's right edge. */}
       <span
         className="shrink-0 text-[var(--font-minor)] text-[var(--text-dim)]"
-        title={`最近改动：${stampLabel}`}
+        title={t('tree.lastChanged', { time: stampLabel })}
       >
         {stampLabel}
       </span>
@@ -306,8 +305,8 @@ export const NodeRow = memo(function NodeRow({
       {!editing ? (
         <span
           role="button"
-          aria-label="重命名"
-          title="重命名（程序内，不会修改磁盘目录名）"
+          aria-label={t('tree.rename')}
+          title={t('tree.renameTitle')}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation()

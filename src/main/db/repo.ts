@@ -8,6 +8,7 @@
  */
 import { getDb, type DB } from './index.js'
 import { normalizePath, pathKey } from '../utils/path.js'
+import { t } from '../i18n.js'
 import type {
   DayCount,
   EventRecord,
@@ -281,7 +282,7 @@ function parseMeta(json: string | null): Record<string, unknown> {
 /** The node's `name` for a note is a one-line excerpt; the body lives in `meta.text`. */
 export function noteTitle(text: string): string {
   const firstLine = (text ?? '').split(/\r?\n/)[0].trim()
-  if (!firstLine) return '新备注'
+  if (!firstLine) return t('node.newNote')
   return firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine
 }
 

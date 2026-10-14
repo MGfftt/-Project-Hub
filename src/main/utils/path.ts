@@ -8,6 +8,8 @@ import { existsSync, realpathSync } from 'node:fs'
 import { basename, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 
+import { t } from '../i18n'
+
 /**
  * Normalise a user-supplied path for storage.
  * - expands `~`
@@ -93,11 +95,11 @@ export function isFilesystemRoot(p: string): boolean {
 
 export function assertIndexableRoot(p: string): { ok: true } | { ok: false; reason: string } {
   const n = normalizePath(p)
-  if (!n) return { ok: false, reason: '路径为空' }
-  if (isFilesystemRoot(n)) return { ok: false, reason: '不能把文件系统根目录作为索引根' }
-  if (!pathExists(n)) return { ok: false, reason: '路径不存在' }
+  if (!n) return { ok: false, reason: t('root.empty') }
+  if (isFilesystemRoot(n)) return { ok: false, reason: t('root.filesystemRoot') }
+  if (!pathExists(n)) return { ok: false, reason: t('root.missing') }
   if (isSubPath(homedir(), n) && pathKey(n) === pathKey(homedir())) {
-    return { ok: false, reason: '不建议索引整个用户目录' }
+    return { ok: false, reason: t('root.home') }
   }
   return { ok: true }
 }

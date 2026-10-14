@@ -14,6 +14,7 @@ import type { HubEvent, TreeNode } from '@shared/types'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
 import { formatRelative } from '@renderer/lib/format'
+import { t, tCount } from '@renderer/lib/i18n'
 import { EmptyState } from '@renderer/components/EmptyState'
 import { Skeleton } from '@renderer/components/Skeleton'
 
@@ -27,7 +28,13 @@ type Zoom = (typeof ZOOM_ORDER)[number]
 /** Axis bucket width in px per zoom step — keeps the labels readable. */
 const BUCKET_PX: Record<Zoom, number> = { day: 120, week: 64, month: 40, quarter: 28, year: 18 }
 
-const ZOOM_LABEL: Record<Zoom, string> = { day: '日', week: '周', month: '月', quarter: '季', year: '年' }
+const ZOOM_LABEL_KEY: Record<Zoom, string> = {
+  day: 'map.zoomLevel.day',
+  week: 'map.zoomLevel.week',
+  month: 'map.zoomLevel.month',
+  quarter: 'map.zoomLevel.quarter',
+  year: 'map.zoomLevel.year'
+}
 
 /** The axis label pattern produced at each zoom step. */
 const ZOOM_PATTERN: Record<Zoom, string> = {
@@ -49,7 +56,11 @@ const SOURCE_COLOR: Record<HubEvent['source'], string> = {
   manual: '#f59e0b'
 }
 
-const SOURCE_LABEL: Record<HubEvent['source'], string> = { git: 'Git', fs: '文件', manual: '手动' }
+const SOURCE_LABEL_KEY: Record<HubEvent['source'], string> = {
+  git: 'map.source.git',
+  fs: 'map.source.fs',
+  manual: 'map.source.manual'
+}
 
 const LANE_LABEL_PX = 180
 const LANE_HEIGHT = 32
@@ -61,11 +72,11 @@ const MAX_RENDERED = 1500
 const MAX_FILES_SHOWN = 20
 const DAY_MS = 86_400_000
 
-const RANGE_PRESETS: ReadonlyArray<{ label: string; days: number }> = [
-  { label: '最近 7 天', days: 7 },
-  { label: '最近 30 天', days: 30 },
-  { label: '最近 90 天', days: 90 },
-  { label: '全部', days: 0 }
+const RANGE_PRESETS: ReadonlyArray<{ labelKey: string; days: number }> = [
+  { labelKey: 'map.range.last7', days: 7 },
+  { labelKey: 'map.range.last30', days: 30 },
+  { labelKey: 'map.range.last90', days: 90 },
+  { labelKey: 'map.range.all', days: 0 }
 ]
 
 /* ------------------------------------------------------------------ */
@@ -175,11 +186,16 @@ function stamp(ts: number): string {
 }
 
 function dotTitle(ev: HubEvent, zoom: Zoom): string {
-  const head = ev.message && ev.message.trim() ? ev.message.trim() : '（无提交信息）'
+  const head = ev.message && ev.message.trim() ? ev.message.trim() : t('map.noCommitMessage')
   return [
     head,
     `${bucketLabel(bucketStart(ev.occurred_at, zoom), zoom)} · ${stamp(ev.occurred_at)}`,
-    `${SOURCE_LABEL[ev.source]} · ${ev.file_count} 个文件 · +${ev.insertions} / -${ev.deletions}`
+    t('map.eventStats', {
+      source: t(SOURCE_LABEL_KEY[ev.source]),
+      n: ev.file_count,
+      ins: ev.insertions,
+      del: ev.deletions
+    })
   ].join('\n')
 }
 
@@ -252,7 +268,7 @@ const EventDot = memo(function EventDot({ dot, zoom, active, onPick }: DotProps)
     <button
       type="button"
       title={dotTitle(dot.event, zoom)}
-      aria-label={dotTitle(dot.event, zoom).replace(/\n/g, '，')}
+      aria-label={dotTitle(dot.event, zoom).replace(/\n/g, t('map.ariaSeparator'))}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => onPick(dot.event)}
@@ -288,8 +304,8 @@ const ClusterMarker = memo(function ClusterMarker({
   return (
     <button
       type="button"
-      title={`${cluster.count} 次改动 · 点击放大`}
-      aria-label={`${cluster.count} 次改动，点击放大查看`}
+      title={t('map.timeline.cluster', { n: cluster.count })}
+      aria-label={t('map.timeline.clusterAria', { n: cluster.count })}
       onClick={() => onOpen(cluster)}
       className="absolute flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--panel)] text-[10px] font-medium leading-none text-[var(--text)] shadow-sm hover:ring-2 hover:ring-[var(--accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       style={{ left: cluster.x, top: '50%', width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2 }}
@@ -375,7 +391,7 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
   }, [events, openFilesFor])
 
   if (events.length === 0) {
-    return <p className="p-4 text-xs text-[var(--text-dim)]">当前筛选条件下没有改动记录</p>
+    return <p className="p-4 text-xs text-[var(--text-dim)]">{t('map.timeline.emptyFiltered')}</p>
   }
 
   return (
@@ -383,7 +399,7 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
       {events.map((ev) => {
         const isActive = selectedId === ev.id
         const filesOpen = openFilesFor === ev.id
-        const head = ev.message && ev.message.trim() ? ev.message.trim() : '（无提交信息）'
+        const head = ev.message && ev.message.trim() ? ev.message.trim() : t('map.noCommitMessage')
         return (
           <li key={ev.id} className={isActive ? 'bg-[var(--accent)]/10' : undefined}>
             <button
@@ -410,7 +426,7 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
                 <span className="max-w-[9rem] truncate">{labelOf(ev.node_id)}</span>
                 <span className="text-emerald-600 dark:text-emerald-400">+{ev.insertions}</span>
                 <span className="text-rose-600 dark:text-rose-400">-{ev.deletions}</span>
-                <span>{ev.file_count} 个文件</span>
+                <span>{t('map.fileCount', { n: ev.file_count })}</span>
               </span>
             </button>
 
@@ -435,7 +451,7 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
                   ))}
                   {ev.files.length > MAX_FILES_SHOWN ? (
                     <li className="pt-1 text-[11px] text-[var(--text-dim)]">
-                      +{ev.files.length - MAX_FILES_SHOWN} 个文件
+                      {t('map.moreFiles', { n: ev.files.length - MAX_FILES_SHOWN })}
                     </li>
                   ) : null}
                 </ul>
@@ -445,7 +461,9 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
         )
       })}
       {total > events.length ? (
-        <li className="px-3 py-2 text-[11px] text-[var(--text-dim)]">仅显示最近 {events.length} 条</li>
+        <li className="px-3 py-2 text-[11px] text-[var(--text-dim)]">
+          {t('map.timeline.showingRecent', { n: events.length })}
+        </li>
       ) : null}
     </ul>
   )
@@ -661,19 +679,30 @@ export default function Timeline() {
   const isSingleNode = Boolean(filter.nodeIds && filter.nodeIds.length === 1)
   const singleNodeId = isSingleNode && filter.nodeIds ? filter.nodeIds[0] : null
   const firstName = singleNodeId !== null ? labelOf(singleNodeId) : null
-  const breadcrumbName = filter.nodeIds && filter.nodeIds.length > 0 ? firstName ?? '已选节点' : '全部项目'
+  const breadcrumbName =
+    filter.nodeIds && filter.nodeIds.length > 0
+      ? firstName ?? t('map.timeline.selectedNode')
+      : t('map.timeline.allProjects')
   const noGitRepo = singleNodeId !== null ? statsCache[singleNodeId]?.isGitRepo === false : false
-  const activePreset = RANGE_PRESETS.find((p) => (p.days === 0 ? rangeDays === 0 : rangeDays === p.days))?.label ?? null
+  const activePreset =
+    RANGE_PRESETS.find((p) => (p.days === 0 ? rangeDays === 0 : rangeDays === p.days))?.labelKey ??
+    null
 
   const rangeText = `${new Date(windowStart).toLocaleDateString('zh-CN')} — ${new Date(
     Math.min(windowEnd, Date.now())
   ).toLocaleDateString('zh-CN')}`
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[var(--panel)] text-[var(--text)]" aria-label="变更时间线">
+    <section
+      className="flex h-full min-h-0 flex-col bg-[var(--panel)] text-[var(--text)]"
+      aria-label={t('map.timeline.label')}
+    >
       <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
-        <nav className="flex min-w-0 items-center gap-1 text-sm" aria-label="面包屑">
-          <span className="text-[var(--text-dim)]">时间线</span>
+        <nav
+          className="flex min-w-0 items-center gap-1 text-sm"
+          aria-label={t('map.timeline.breadcrumb')}
+        >
+          <span className="text-[var(--text-dim)]">{t('map.timeline.title')}</span>
           <span className="text-[var(--text-dim)]" aria-hidden>
             /
           </span>
@@ -687,45 +716,52 @@ export default function Timeline() {
             onClick={() => clearFilter()}
             className="rounded-md border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-dim)] hover:text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           >
-            清除过滤
+            {t('map.timeline.clearFilter')}
           </button>
         ) : null}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-0.5" role="group" aria-label="时间范围">
+          <div
+            className="flex items-center gap-0.5"
+            role="group"
+            aria-label={t('map.timeline.range')}
+          >
             {RANGE_PRESETS.map((p) => (
               <button
-                key={p.label}
+                key={p.labelKey}
                 type="button"
-                aria-pressed={activePreset === p.label}
+                aria-pressed={activePreset === p.labelKey}
                 onClick={() => applyRange(p.days)}
                 className={`rounded-md px-2 py-0.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-                  activePreset === p.label
+                  activePreset === p.labelKey
                     ? 'bg-[var(--accent)]/15 font-medium text-[var(--accent)]'
                     : 'text-[var(--text-dim)] hover:text-[var(--text)]'
                 }`}
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             ))}
           </div>
           <div
             className="flex items-center gap-0.5 rounded-md border border-[var(--border)] p-0.5"
             role="group"
-            aria-label="缩放级别"
+            aria-label={t('map.timeline.zoom')}
           >
             {ZOOM_ORDER.map((z) => (
               <button
                 key={z}
                 type="button"
                 aria-pressed={zoom === z}
-                title={`缩放：${ZOOM_LABEL[z]}（${ZOOM_PATTERN[z]}）`}
+                title={t('map.timeline.zoomTooltip', {
+                  label: t(ZOOM_LABEL_KEY[z]),
+                  pattern: ZOOM_PATTERN[z]
+                })}
                 onClick={() => setZoom(z)}
                 className={`h-5 w-6 rounded text-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                   zoom === z ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-dim)] hover:bg-[var(--border)]/40'
                 }`}
               >
-                {ZOOM_LABEL[z]}
+                {t(ZOOM_LABEL_KEY[z])}
               </button>
             ))}
           </div>
@@ -742,7 +778,7 @@ export default function Timeline() {
         <div className="flex min-w-0 flex-1 flex-col">
           {capped ? (
             <p className="border-b border-[var(--border)] bg-[var(--border)]/20 px-3 py-1 text-[11px] text-[var(--text-dim)]">
-              仅显示最近 {MAX_RENDERED} 条
+              {t('map.timeline.showingRecent', { n: MAX_RENDERED })}
             </p>
           ) : null}
 
@@ -753,13 +789,11 @@ export default function Timeline() {
           ) : lanes.length === 0 ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <EmptyState
-                title="该项目暂无改动记录"
+                title={t('map.timeline.emptyTitle')}
                 description={
-                  noGitRepo
-                    ? '该节点不是 Git 仓库，无法同步提交记录。'
-                    : '同步 Git 后即可查看提交历史。'
+                  noGitRepo ? t('map.timeline.emptyNotGit') : t('map.timeline.emptyHint')
                 }
-                actionLabel={syncing ? '同步中…' : '立即同步 Git'}
+                actionLabel={syncing ? t('map.syncing') : t('map.syncNow')}
                 onAction={onSync}
               />
             </div>
@@ -777,7 +811,7 @@ export default function Timeline() {
                     className="flex items-center border-b border-[var(--border)] px-2 text-[10px] text-[var(--text-dim)]"
                     style={{ width: LANE_LABEL_PX, height: 32 }}
                   >
-                    节点 / 最近改动
+                    {t('map.timeline.laneHeader')}
                   </div>
                   {lanes.map((lane) => (
                     <div
@@ -827,14 +861,14 @@ export default function Timeline() {
         <aside
           className="flex min-h-0 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--panel)]"
           style={{ width: LIST_WIDTH }}
-          aria-label="事件列表"
+          aria-label={t('map.timeline.eventList')}
         >
           <div className="border-b border-[var(--border)] p-2">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索提交信息或文件…"
-              aria-label="搜索改动"
+              placeholder={t('map.timeline.searchPlaceholder')}
+              aria-label={t('map.timeline.searchLabel')}
               className="w-full rounded-md border border-[var(--border)] bg-transparent px-2 py-1 text-xs text-[var(--text)] placeholder:text-[var(--text-dim)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
             />
           </div>
@@ -851,10 +885,10 @@ export default function Timeline() {
       </div>
 
       <footer className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-3 py-1 text-[11px] text-[var(--text-dim)]">
-        <span>{shown.length} 条改动</span>
-        <span>{lanes.length} 个项目</span>
+        <span>{tCount('map.changeCountOne', 'map.changeCount', shown.length)}</span>
+        <span>{t('map.projectCount', { n: lanes.length })}</span>
         <span>{rangeText}</span>
-        <span className="ml-auto">Ctrl + 滚轮缩放 · Shift + 滚轮横向滚动</span>
+        <span className="ml-auto">{t('map.timeline.wheelHint')}</span>
       </footer>
     </section>
   )

@@ -70,9 +70,9 @@ Vitest runs under plain Node, so without the fallback the entire DB layer — an
 
 ## D-005 · The built-in icon set is 45 hand-authored glyphs, not §8.4's 60 lucide names
 
-**Decision.** `src/shared/icons.ts` ships 45 glyphs as raw SVG path data and is the first source consulted for any icon. The remaining names in the frozen §8.4 list are resolved from a static table in `src/renderer/src/lib/lucideIcons.ts` (see D-011).
+**Decision.** `src/shared/icons.ts` ships 46 glyphs as raw SVG path data and is the first source consulted for any icon. The remaining names in the frozen §8.4 list are resolved from a static table in `src/renderer/src/lib/lucideIcons.ts` (see D-011).
 
-**Why.** The book's §0.1 requires every dependency to justify itself. ~4 kB of path data removes lucide-react from the icon paint path entirely, so drawing a tree of 5,000 rows never touches the library. The 45 glyphs cover the names the auto-inference rules actually produce.
+**Why.** The book's §0.1 requires every dependency to justify itself. ~4 kB of path data removes lucide-react from the icon paint path entirely, so drawing a tree of 5,000 rows never touches the library. The 46 glyphs cover the names the auto-inference rules actually produce.
 
 **Cost.** Two icon vocabularies. `lib/treeIcons.ts` decides which one applies, and `inferAutoIcon()` documents the substitutions (`folder-tree` → `layers`, `folder-code` → `file-code`, `alert-triangle` → the amber warning glyph).
 
@@ -168,11 +168,11 @@ That threw inside `gitFor()`, which made `checkIsRepo()` fail, which made `probe
 
 ## D-015 · UI strings are Chinese; documentation and comments are bilingual or English
 
-**Decision.** Every user-visible string in the app is Simplified Chinese. `README.md` carries full Chinese and English sections. Code comments are English.
+**Decision.** `README.md` carries full Chinese and English sections. Code comments are English. The app's own strings were Chinese-only, with Chinese as the shipped default — **superseded by D-027, which adds English and lets the user switch.**
 
-**Why.** The project book is written in Chinese and its acceptance cases quote Chinese UI text verbatim (「路径不存在」, 「该项目暂无改动记录」, 「仅在本程序中显示，不会修改磁盘目录名」). Changing those strings would break the acceptance cases. The README is bilingual because the request explicitly asked for both.
+**Why.** The project book is written in Chinese and its acceptance cases quote Chinese UI text verbatim (「路径不存在」, 「该项目暂无改动记录」, 「仅在本程序中显示，不会修改磁盘目录名」). Keeping Chinese as the default keeps those acceptance cases valid. The README is bilingual because the request explicitly asked for both.
 
-**Cost.** No i18n framework, so an English UI would require a real extraction pass. Out of scope for v1 (the book lists no localisation requirement).
+**Cost.** At the time there was no i18n framework, so an English UI would have required a real extraction pass; the book listed no localisation requirement, so it was out of scope for v1. D-027 is that extraction pass.
 
 ---
 
@@ -370,5 +370,46 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 **Cost.** Roughly seventy lines of pointer bookkeeping on the map, which now depends on `data-map-card` staying stable, plus one more free-text column the renderer has to degrade gracefully. The menu grew to eleven actions and a swatch row, so it is now tall enough to be clamped (`max-h`/`overflow-auto`) on a short window.
 
 **Lesson.** An event-driven cache needs a bootstrapping read. `tree:updated` was emitted correctly at every site and the window was still blank, because nothing ever asked for the first state — the subscription answered "when it changes", never "what it is".
+
+---
+
+## D-026 · Pointer capture is taken on movement, not on press
+
+**Context.** A user report: after the map cards became draggable, clicking a card no longer opened the node's page. The regression was intermittent enough that the first reading was "the click handler is flaky".
+
+**Decision.** `setPointerCapture` on a map card now happens in `onCardPointerMove`, only once the pointer has travelled more than `DRAG_START_PX`, instead of in `onCardPointerDown`. The `onClick` that selects the node moved off the small label button and onto the card div itself, guarded by `justDragged`.
+
+**Why.** `setPointerCapture` is not passive bookkeeping: Chromium retargets the compatibility mouse events to the capturing element, and the `click` event fires on the nearest common ancestor of `mousedown` and `mouseup`. With capture taken on press, both landed on the card div — which carried no click handler — so the child button's handler never ran. Whether it fired depended on capture winning the race against the first `pointermove`, which is exactly why it looked flaky rather than broken. Taking capture only when a drag actually starts leaves an ordinary click completely untouched, and hoisting the handler to the card removes the dependency on which descendant the pointer happened to be over.
+
+**Evidence.** A CDP probe against the real UI: six presses in a row on the same map card all open the node page (`0 of 6 missed`); the properties column starts folded and follows the selection; a ghost label still appears mid-drag; a drag onto a group still sets `parent_id: 5`; a drag does not also select the card; no uncaught renderer errors. `npm run gate:v2` exit 0 (176 tests). Commit `14cd0d9`.
+
+**Cost.** The card is now the click target, so every control inside it has to opt out with `data-map-nodrag` and `stopPropagation` on `pointerdown` — the pattern the expander and the `+N` pill already used.
+
+**Lesson.** Pointer capture changes the event stream, not just the event target. Any element that takes capture on press has silently taken over the click for its whole subtree.
+
+---
+
+## D-027 · English is a second language behind a module-level `t()` and a remount
+
+**Context.** A request to give the program English support. D-015 had recorded the opposite decision, with "no i18n framework" as the accepted cost.
+
+**Decision.**
+
+1. **A module-level `t(key, vars)` rather than a React context.** Strings are also needed outside components — `lib/format.ts`, `lib/tree.ts`, the stores, `setStatus` call sites — where a hook is not available. Reactivity comes from `useSyncExternalStore` in `useLang()`, and `src/renderer/src/App.tsx` renders `<AppShell key={lang} />`, so a language change throws the tree away and every call site re-reads the language.
+2. **Messages are positional tuples**, `['中文', 'English']`, not two parallel dictionaries: a key that exists in one language and not the other cannot compile. A key that is missing at runtime returns itself and warns once, so an untranslated string is visible rather than plausible.
+3. **One part file per area of the interface** (`parts/app|tree|detail|map|settings.ts`) so two people never edit the same table; `parts/index.ts` is frozen and must not be reordered.
+4. **The setting is authoritative, a `localStorage` hint paints the first frame.** `language` lives in the settings table like everything else; `hub.lang` only exists so the first paint after a restart is not the wrong language for a frame.
+5. **The main process has its own `src/main/i18n.ts` with no imports at all**, because the tray menu and the error dialogs cannot reach the renderer. `settings:set` calls `setLang`, and `onLangChange` re-renders the tray menu in place.
+6. **`tCount(one, many, n)` where English needs a plural twin** (Chinese does not), with `{n}` still interpolated.
+
+**Why not a library.** `i18next` and friends bring a plugin system, a loader and a fallback chain for a dictionary that is a few hundred short strings in two languages; the whole runtime here is about sixty lines, and a positional tuple is a stronger correctness property than any of them give by default.
+
+**Why English is not the default.** D-015's acceptance cases quote Chinese UI text verbatim, so the shipped default stays Chinese and English is opt-in from the Language row in Settings.
+
+**Evidence.** `npm run gate:v2` exit 0. A CDP probe: the shell starts in Chinese with `document.documentElement.lang === 'zh-CN'`; after `hub.settings.set('language','en')` and a reload the placeholder reads `Search projects…`, `document.documentElement.lang === 'en'` and `localStorage['hub.lang'] === 'en'`; switching back restores `搜索项目…`. Seven screenshots of both languages are in `docs/screenshots/` and embedded in `README.md` §10.
+
+**Cost.** Two languages to keep in step, and about 2,900 CJK characters moved behind keys across six part files and two runtimes. Count-bearing English strings need a singular twin and a `tCount` call; translations are written as full sentences per key, so a sentence that only differs by a trailing space needs that space written into the entry (`settings.inDuration` is `' in {duration}'`).
+
+**Lesson.** A language switch is really a remount. Because strings are resolved at call time from module scope, nothing re-renders by itself; keying the shell on the language is one line and removes the entire "some labels did not update" class of bug.
 
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { IconDef } from '@shared/icons'
 import type { IconAsset, IconType } from '@shared/types'
 import { EMOJI_PALETTE } from '@renderer/lib/emoji'
+import { t } from '@renderer/lib/i18n'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 import Modal from '@renderer/components/dialogs/Modal'
@@ -21,10 +22,10 @@ export interface IconPickerProps {
 
 type Tab = 'auto' | 'builtin' | 'custom'
 
-const TAB_LABELS: ReadonlyArray<{ id: Tab; label: string }> = [
-  { id: 'auto', label: '自动' },
-  { id: 'builtin', label: '内置' },
-  { id: 'custom', label: '自定义' }
+const TAB_LABELS: ReadonlyArray<{ id: Tab; key: string }> = [
+  { id: 'auto', key: 'settings.tabAuto' },
+  { id: 'builtin', key: 'settings.tabBuiltin' },
+  { id: 'custom', key: 'settings.tabCustom' }
 ]
 
 /** Local mirror of the main process' `auto` inference, used for the preview. */
@@ -61,7 +62,7 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
         setCustomAssets(assets)
       })
       .catch((err: unknown) => {
-        if (alive) setError(err instanceof Error ? err.message : '读取图标失败')
+        if (alive) setError(err instanceof Error ? err.message : t('settings.iconLoadFailed'))
       })
     return () => {
       alive = false
@@ -80,7 +81,7 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
           setStatus(okText, 'info')
           onClose()
         })
-        .catch(() => setStatus('设置图标失败', 'error'))
+        .catch(() => setStatus(t('settings.iconSetFailed'), 'error'))
         .finally(() => setBusy(false))
     },
     [nodeId, onClose, setStatus]
@@ -103,30 +104,30 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
       .importIcon(nodeId)
       .then((res) => {
         if (!res.ok) {
-          setStatus(res.error ?? '导入图标失败', 'error')
+          setStatus(res.error ?? t('settings.iconImportFailed'), 'error')
           return
         }
         useTree.getState().bump()
-        setStatus('已导入图标', 'info')
+        setStatus(t('settings.iconImported'), 'info')
         onClose()
       })
-      .catch(() => setStatus('导入图标失败', 'error'))
+      .catch(() => setStatus(t('settings.iconImportFailed'), 'error'))
       .finally(() => setBusy(false))
   }, [nodeId, onClose, setStatus])
 
   return (
-    <Modal title="选择图标" onClose={onClose} className="max-w-md">
-      <div className="mb-3 flex gap-1" role="tablist" aria-label="图标来源">
-        {TAB_LABELS.map((t) => (
+    <Modal title={t('settings.iconPickerTitle')} onClose={onClose} className="max-w-md">
+      <div className="mb-3 flex gap-1" role="tablist" aria-label={t('settings.iconSource')}>
+        {TAB_LABELS.map((item) => (
           <button
-            key={t.id}
+            key={item.id}
             type="button"
             role="tab"
-            aria-selected={tab === t.id}
-            className={`btn h-6 px-2.5 py-0 text-[11px] ${tab === t.id ? 'btn-primary' : ''}`}
-            onClick={() => setTab(t.id)}
+            aria-selected={tab === item.id}
+            className={`btn h-6 px-2.5 py-0 text-[11px] ${tab === item.id ? 'btn-primary' : ''}`}
+            onClick={() => setTab(item.id)}
           >
-            {t.label}
+            {t(item.key)}
           </button>
         ))}
       </div>
@@ -135,7 +136,9 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
 
       {tab === 'auto' ? (
         <div className="flex flex-col items-center gap-3 py-4">
-          <span className="text-[11px] text-[var(--text-dim)]">根据名称与类型推断</span>
+          <span className="text-[11px] text-[var(--text-dim)]">
+            {t('settings.iconInfer')}
+          </span>
           <span className="flex h-12 w-12 items-center justify-center rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
             <Glyph def={autoDef} fallbackName={autoName} size={28} />
           </span>
@@ -144,9 +147,9 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
             type="button"
             className="btn"
             disabled={busy}
-            onClick={() => apply('auto', null, '已恢复自动图标')}
+            onClick={() => apply('auto', null, t('settings.iconAutoRestored'))}
           >
-            恢复自动
+            {t('settings.iconRestoreAuto')}
           </button>
         </div>
       ) : null}
@@ -155,14 +158,14 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
         <div className="flex flex-col gap-2">
           <input
             className="input focus-ring h-7 w-full text-xs"
-            placeholder="搜索图标名称…"
+            placeholder={t('settings.iconSearchPlaceholder')}
             value={query}
-            aria-label="搜索内置图标"
+            aria-label={t('settings.iconSearchLabel')}
             onChange={(e) => setQuery(e.target.value)}
           />
           {visibleDefs.length === 0 ? (
             <p className="py-6 text-center text-[11px] text-[var(--text-dim)]">
-              {defs.length === 0 ? '加载中…' : '没有匹配的图标'}
+              {defs.length === 0 ? t('settings.iconLoading') : t('settings.iconNoMatch')}
             </p>
           ) : (
             <div className="grid grid-cols-6 gap-1">
@@ -175,7 +178,7 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
                   disabled={busy}
                   className="focus-ring flex h-10 items-center justify-center rounded-[6px] border hover:[background-color:var(--hover)]"
                   style={{ borderColor: 'var(--border)' }}
-                  onClick={() => apply('lucide', def.name, `已设置图标：${def.name}`)}
+                  onClick={() => apply('lucide', def.name, t('settings.iconSet', { name: def.name }))}
                 >
                   <Glyph def={def} fallbackName={def.name} size={20} />
                 </button>
@@ -188,17 +191,17 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
       {tab === 'custom' ? (
         <div className="flex flex-col gap-3">
           <div>
-            <p className="mb-1 text-[11px] text-[var(--text-dim)]">Emoji</p>
+            <p className="mb-1 text-[11px] text-[var(--text-dim)]">{t('settings.emoji')}</p>
             <div className="grid grid-cols-8 gap-1">
               {EMOJI_PALETTE.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
-                  aria-label={`使用 ${emoji}`}
+                  aria-label={t('settings.useEmoji', { emoji })}
                   disabled={busy}
                   className="focus-ring flex h-8 items-center justify-center rounded-[6px] border text-base hover:[background-color:var(--hover)]"
                   style={{ borderColor: 'var(--border)' }}
-                  onClick={() => apply('emoji', emoji, `已设置图标：${emoji}`)}
+                  onClick={() => apply('emoji', emoji, t('settings.iconSet', { name: emoji }))}
                 >
                   {emoji}
                 </button>
@@ -207,9 +210,11 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
           </div>
 
           <div>
-            <p className="mb-1 text-[11px] text-[var(--text-dim)]">已导入的图片</p>
+            <p className="mb-1 text-[11px] text-[var(--text-dim)]">
+              {t('settings.importedImages')}
+            </p>
             {customAssets.length === 0 ? (
-              <p className="text-[11px] text-[var(--text-dim)]">暂无</p>
+              <p className="text-[11px] text-[var(--text-dim)]">{t('settings.none')}</p>
             ) : (
               <ul className="flex flex-col gap-0.5">
                 {customAssets.map((asset) => (
@@ -220,7 +225,7 @@ export function IconPicker({ nodeId, onClose }: IconPickerProps): JSX.Element {
               </ul>
             )}
             <button type="button" className="btn mt-2" disabled={busy} onClick={onImport}>
-              从文件导入
+              {t('settings.importFromFile')}
             </button>
           </div>
         </div>

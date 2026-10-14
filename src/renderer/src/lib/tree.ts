@@ -5,6 +5,7 @@
  */
 
 import type { TreeNode } from '@shared/types'
+import { t } from './i18n'
 
 export interface FlatRow {
   node: TreeNode
@@ -104,29 +105,29 @@ export function descendantIds(node: TreeNode | undefined, byId: Map<number, Tree
 export function kindLabel(kind: TreeNode['kind']): string {
   switch (kind) {
     case 'group':
-      return '分组'
+      return t('kind.group')
     case 'project':
-      return '项目'
+      return t('kind.project')
     case 'folder':
-      return '目录'
+      return t('kind.folder')
     case 'note':
-      return '备注'
+      return t('kind.note')
     default:
-      return '目录'
+      return t('kind.folder')
   }
 }
 
 export function statusLabel(status: TreeNode['status']): string {
   switch (status) {
     case 'active':
-      return '活跃'
+      return t('status.active')
     case 'paused':
-      return '暂停'
+      return t('status.paused')
     case 'done':
-      return '已完成'
+      return t('status.done')
     case 'archived':
     default:
-      return '已归档'
+      return t('status.archived')
   }
 }
 

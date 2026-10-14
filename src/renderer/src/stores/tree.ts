@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { NodeStats, ScanProgress, TreeNode } from '@shared/types'
+import { t } from '@renderer/lib/i18n'
 import { expandAllOpen, indexById } from '@renderer/lib/tree'
 
 /* ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ export const useTree = create<TreeState>()((set, get) => ({
       install(set, nodes)
       set({ open: nextOpen })
     } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : '读取项目树失败' })
+      set({ loading: false, error: err instanceof Error ? err.message : t('app.treeLoadFailed') })
     }
   },
 
@@ -98,7 +99,7 @@ export const useTree = create<TreeState>()((set, get) => ({
     const cached = get().statsCache[id]
     if (cached) return cached
     const hub = window.hub
-    if (!hub) throw new Error('window.hub 不可用')
+    if (!hub) throw new Error(t('app.hubUnavailable'))
     const stats = await hub.nodes.stats(id)
     set({ statsCache: { ...get().statsCache, [id]: stats } })
     return stats

@@ -1,9 +1,14 @@
 /**
- * Chinese-first formatting helpers (§9.1 typography, §8.2 属性 fields).
+ * Locale-aware formatting helpers (§9.1 typography, §8.2 属性 fields).
  *
  * Every function is pure and defensive: the renderer formats values that arrive
  * from SQLite, and a single `null` must degrade to 「—」 instead of throwing.
+ *
+ * The words these helpers build ("3 分钟前" / "3 min ago") come from `t()`, so
+ * every call reads the language that is current at the moment it is called.
  */
+
+import { t } from './i18n'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -15,11 +20,11 @@ const EMPTY = '—'
 export function formatRelativeTime(ts: number | null | undefined): string {
   if (ts === null || ts === undefined || !Number.isFinite(ts)) return EMPTY
   const diff = Date.now() - ts
-  if (diff < 0) return '刚刚'
-  if (diff < MINUTE) return '刚刚'
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)} 分钟前`
-  if (diff < DAY) return `${Math.floor(diff / HOUR)} 小时前`
-  if (diff < 30 * DAY) return `${Math.floor(diff / DAY)} 天前`
+  if (diff < 0) return t('time.now')
+  if (diff < MINUTE) return t('time.now')
+  if (diff < HOUR) return t('time.minutesAgo', { n: Math.floor(diff / MINUTE) })
+  if (diff < DAY) return t('time.hoursAgo', { n: Math.floor(diff / HOUR) })
+  if (diff < 30 * DAY) return t('time.daysAgo', { n: Math.floor(diff / DAY) })
   return shortDate(ts)
 }
 
@@ -78,17 +83,16 @@ export function formatDelta(insertions: number | null | undefined, deletions: nu
 /** 「3 天」/「5 小时」/「12 分钟」 — used for `nextRun` countdowns. */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms)) return EMPTY
-  if (ms <= 0) return '即将'
-  if (ms < MINUTE) return `${Math.max(1, Math.round(ms / 1000))} 秒`
-  if (ms < HOUR) return `${Math.round(ms / MINUTE)} 分钟`
-  if (ms < DAY) return `${Math.round(ms / HOUR)} 小时`
-  return `${Math.round(ms / DAY)} 天`
+  if (ms <= 0) return t('time.soon')
+  if (ms < MINUTE) return t('time.seconds', { n: Math.max(1, Math.round(ms / 1000)) })
+  if (ms < HOUR) return t('time.minutes', { n: Math.round(ms / MINUTE) })
+  if (ms < DAY) return t('time.hours', { n: Math.round(ms / HOUR) })
+  return t('time.days', { n: Math.round(ms / DAY) })
 }
 
 /** 「123 字」 for a Markdown note body. */
 export function formatNoteLength(markdown: string | null | undefined): string {
-  if (!markdown) return '0 字'
-  return `${formatCount(markdown.length)} 字`
+  return t('note.chars', { n: formatCount(markdown?.length ?? 0) })
 }
 
 export function pad2(n: number): string {

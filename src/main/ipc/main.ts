@@ -36,6 +36,7 @@ import { driverName } from '../db/sqlite'
 import { directorySize, copyIntoStore, listFiles, removeFileQuiet, isImageFile } from '../utils/fsops'
 import { normalizePath, pathExists, safeRelative } from '../utils/path'
 import { rankByMatch } from '../../shared/match'
+import { setLang, t } from '../i18n'
 import { scanRoot } from '../scanner'
 import { syncAllGit, recordFolderChange } from '../background/tasks'
 import { SerialQueue, spawnWorker, runJob } from '../worker/pool'
@@ -107,8 +108,8 @@ async function pickDirectory(win: BrowserWindow | null, title: string): Promise<
 
 async function pickImage(win: BrowserWindow | null, title: string): Promise<string | null> {
   const filters = [
-    { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'ico', 'svg'] },
-    { name: '所有文件', extensions: ['*'] }
+    { name: t('dialog.images'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'ico', 'svg'] },
+    { name: t('dialog.allFiles'), extensions: ['*'] }
   ]
   const res = win
     ? await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters })
@@ -138,7 +139,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   /* ---------------------------------------------------------------- roots */
 
   handle(CH.roots.pick, async () => {
-    const picked = await pickDirectory(ctx.getWindow(), '选择要纳入 Project Hub 的根目录')
+    const picked = await pickDirectory(ctx.getWindow(), t('dialog.addRoot'))
     if (!picked) return null
     return normalizePath(picked)
   })
@@ -147,8 +148,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   handle(CH.roots.add, async (path: string) => {
     const normalized = normalizePath(String(path ?? ''))
-    if (!normalized) throw new Error('路径为空')
-    if (!pathExists(normalized)) throw new Error('路径不存在')
+    if (!normalized) throw new Error(t('ipc.emptyPath'))
+    if (!pathExists(normalized)) throw new Error(t('ipc.pathMissing'))
     const existing = repo.getRootByPath(normalized)
     if (existing) return existing
     const root = repo.addRoot(normalized, 4)
@@ -204,7 +205,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   handle(CH.nodes.setDisplayName, (nodeId: number, name: string | null) => {
     const node = repo.getNode(Number(nodeId))
-    if (!node) throw new Error('节点不存在')
+    if (!node) throw new Error(t('ipc.nodeMissing'))
     repo.setIdentity(node.id, name === null || String(name).trim() === '' ? null : String(name).trim(), node.icon_type, node.icon_value)
     ctx.broadcast(CH.broadcast.treeUpdated, null)
   })
@@ -215,14 +216,14 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   // hostile or buggy caller — a thrown error is the honest signal.
   handle(CH.nodes.setIcon, (nodeId: number, type: IconType, value: string | null): void => {
     const node = repo.getNode(Number(nodeId))
-    if (!node) throw new Error('节点不存在')
+    if (!node) throw new Error(t('ipc.nodeMissing'))
     const allowed: IconType[] = ['auto', 'lucide', 'emoji', 'image']
     const iconType = allowed.includes(type) ? type : 'auto'
     let iconValue = value
     if (iconType === 'image' && iconValue) {
       // Only stored assets may be referenced — never a raw user path.
       const safe = anchor.paths.icon(String(iconValue))
-      if (!safe) throw new Error('图标不在应用的数据目录内')
+      if (!safe) throw new Error(t('ipc.iconOutsideData'))
       iconValue = basename(safe)
     }
     repo.setIdentity(node.id, node.display_name, iconType, iconValue ?? null)
@@ -232,10 +233,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   handle(CH.nodes.importIcon, async (nodeId: number) => {
     const id = Number(nodeId)
     const node = repo.getNode(id)
-    if (!node) return { ok: false, error: '节点不存在' }
-    const picked = await pickImage(ctx.getWindow(), '选择图标图片')
+    if (!node) return { ok: false, error: t('ipc.nodeMissing') }
+    const picked = await pickImage(ctx.getWindow(), t('dialog.pickIcon'))
     if (!picked) return { ok: false, error: 'cancelled' }
-    if (!isImageFile(picked)) return { ok: false, error: '不是支持的图片格式' }
+    if (!isImageFile(picked)) return { ok: false, error: t('ipc.notAnImage') }
     try {
       // copyIntoStore writes ONLY into userData/thumbnails (§8).
       const { filename, bytes } = await copyIntoStore(picked, ctx.thumbsDir)
@@ -302,7 +303,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   })
 
   handle(CH.nodes.createGroup, (name: string, parentId: number | null) => {
-    const id = repo.createGroup(String(name || '新分组').slice(0, 80), parentId === null ? null : Number(parentId))
+    const id = repo.createGroup(String(name || t('ipc.newGroup')).slice(0, 80), parentId === null ? null : Number(parentId))
     ctx.broadcast(CH.broadcast.treeUpdated, null)
     return id
   })
@@ -332,7 +333,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     const id = Number(nodeId)
     const node = repo.getNode(id)
     if (!node) return { ok: false }
-    const picked = await pickDirectory(ctx.getWindow(), '选择该项目新的位置')
+    const picked = await pickDirectory(ctx.getWindow(), t('dialog.pickRelocate'))
     if (!picked) return { ok: false }
     const target = normalizePath(picked)
     const clash = repo.getNodeByPath(target)
@@ -355,7 +356,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           node_id: id,
           source: 'manual',
           ref: null,
-          message: `重新定位：${before ?? '(none)'} → ${target}`,
+          message: t('ipc.relocated', { from: before ?? '(none)', to: target }),
           author: 'user',
           occurred_at: Date.now(),
           file_count: 0,
@@ -371,7 +372,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   handle(CH.nodes.stats, async (nodeId: number): Promise<NodeStats> => {
     const node = repo.getNode(Number(nodeId))
-    if (!node) throw new Error('节点不存在')
+    if (!node) throw new Error(t('ipc.nodeMissing'))
     const tree = repo.listNodes().find((n) => n.id === node.id)
     const children = repo.descendantIds(node.id)
     const eventStats = repo.eventStats([node.id, ...children])
@@ -450,8 +451,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   handle(CH.shell.openFolder, async (nodeId: number) => {
     const target = anchor.paths.node(Number(nodeId))
-    if (!target) return { ok: false, error: '该节点没有关联文件夹' }
-    if (!pathExists(target)) return { ok: false, error: '文件夹不存在（可能已被移动或删除）' }
+    if (!target) return { ok: false, error: t('ipc.noFolder') }
+    if (!pathExists(target)) return { ok: false, error: t('ipc.folderMissing') }
     const err = await shell.openPath(target)
     return err ? { ok: false, error: err } : { ok: true }
   })
@@ -551,6 +552,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     if (String(key) === SETTING_KEYS.autoLaunch) {
       app.setLoginItemSettings({ openAtLogin: String(value) === 'true', args: ['--hidden'] })
     }
+    // §9.10 — the tray menu and the next native dialog follow immediately.
+    if (String(key) === SETTING_KEYS.language) setLang(String(value))
     ctx.broadcast(CH.broadcast.taskStatus, ctx.scheduler.status())
   })
   handle(CH.settings.all, () => ({ ...DEFAULT_SETTINGS, ...repo.allSettings() }))
@@ -567,7 +570,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   )
 
   handle(CH.settings.background.choose, async () => {
-    const picked = await pickImage(ctx.getWindow(), '选择背景图片')
+    const picked = await pickImage(ctx.getWindow(), t('dialog.pickBackground'))
     if (!picked) return { ok: false, error: 'cancelled' }
     try {
       const { filename, bytes } = await copyIntoStore(picked, ctx.backgroundsDir)
@@ -616,7 +619,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     // beats returning silently, which would look like success in the UI.
     const allowed = ['rescan', 'git-sync', 'snapshot', 'prune', 'size-sweep'] as const
     if (!allowed.includes(task as (typeof allowed)[number])) {
-      throw new Error(`未知的后台任务：${String(task)}`)
+      throw new Error(t('ipc.unknownTask', { task: String(task) }))
     }
     await ctx.scheduler.runNow(task as (typeof allowed)[number])
   })
@@ -709,7 +712,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
 export async function runScan(ctx: IpcContext, rootId: number, incremental: boolean): Promise<ScanResult> {
   const root = repo.getRoot(rootId)
-  if (!root) throw new Error('根目录不存在')
+  if (!root) throw new Error(t('ipc.rootMissing'))
   // The scan worker opens its own connection to the SAME file the main process
   // has open — never a path derived here, or the worker would scan into a
   // different database and the tree would appear to stay empty.

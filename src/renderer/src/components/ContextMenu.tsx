@@ -13,7 +13,8 @@ import {
   Trash2
 } from 'lucide-react'
 import type { TreeNode } from '@shared/types'
-import { NODE_COLORS, nodeColorValue } from '@renderer/lib/colors'
+import { NODE_COLORS, nodeColorKey, nodeColorValue } from '@renderer/lib/colors'
+import { t } from '@renderer/lib/i18n'
 
 /* ---------------------------------------------------------------------------
  * ContextMenu — the frozen §8.2 order and availability rules.
@@ -94,12 +95,16 @@ export function ContextMenu({
   const [pickedColor, setPickedColor] = useState<string | null | undefined>(undefined)
   const currentColor = pickedColor === undefined ? nodeColorValue(node.color) : pickedColor
   /* §8.2 — a disabled 打开/在文件管理器中显示 explains itself on hover. */
-  const noDiskHint = missing ? '路径不存在' : !node.path ? '分组没有对应的磁盘目录' : undefined
+  const noDiskHint = missing
+    ? t('tree.pathMissing')
+    : !node.path
+      ? t('tree.groupNoDiskPath')
+      : undefined
 
   const actions: ContextMenuAction[] = [
     {
       id: 'open',
-      label: '打开文件夹',
+      label: t('tree.openFolder'),
       icon: <FolderOpen size={ICON_SIZE} aria-hidden />,
       bold: true,
       disabled: noDiskPath,
@@ -108,7 +113,7 @@ export function ContextMenu({
     },
     {
       id: 'reveal',
-      label: '在文件管理器中显示',
+      label: t('tree.revealInFileManager'),
       icon: <MapPin size={ICON_SIZE} aria-hidden />,
       disabled: noDiskPath,
       hint: noDiskHint,
@@ -116,57 +121,57 @@ export function ContextMenu({
     },
     {
       id: 'copy',
-      label: '复制路径',
+      label: t('tree.copyPath'),
       icon: <Copy size={ICON_SIZE} aria-hidden />,
       disabled: node.path == null,
       run: () => onCopyPath?.(node)
     },
     {
       id: 'changes',
-      label: '查看改动',
+      label: t('tree.viewChanges'),
       icon: <BarChart3 size={ICON_SIZE} aria-hidden />,
       separatorBefore: true,
       run: () => onViewChanges?.(node)
     },
     {
       id: 'props',
-      label: '属性',
+      label: t('tree.properties'),
       icon: <Info size={ICON_SIZE} aria-hidden />,
       run: () => onProperties?.(node)
     },
     {
       id: 'note',
-      label: '标注',
+      label: t('tree.annotate'),
       icon: <NotebookPen size={ICON_SIZE} aria-hidden />,
       run: () => onAnnotate?.(node)
     },
     {
       id: 'rename',
-      label: '重命名（程序内）',
+      label: t('tree.renameInApp'),
       icon: <Pencil size={ICON_SIZE} aria-hidden />,
       separatorBefore: true,
-      hint: '仅修改程序内显示名，不会修改磁盘目录名',
+      hint: t('tree.renameHintMenu'),
       run: () => onRename?.(node)
     },
     {
       id: 'icon',
-      label: '更改图标',
+      label: t('tree.changeIcon'),
       icon: <Palette size={ICON_SIZE} aria-hidden />,
       run: () => onChangeIcon?.(node)
     },
     {
       id: 'group',
-      label: '新建子分组',
+      label: t('tree.newChildGroup'),
       icon: <FolderPlus size={ICON_SIZE} aria-hidden />,
       separatorBefore: true,
       run: () => onNewGroup?.(node)
     },
     {
       id: 'remove',
-      label: '从库中移除',
+      label: t('tree.removeFromLibrary'),
       icon: <Trash2 size={ICON_SIZE} aria-hidden />,
       danger: true,
-      hint: '仅从本程序移除，磁盘文件保持不变',
+      hint: t('tree.removeHint'),
       run: () => onRemove?.(node)
     }
   ]
@@ -234,7 +239,7 @@ export function ContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      aria-label={`${node.display_name || node.name} 的操作`}
+      aria-label={t('tree.menuLabel', { name: node.display_name || node.name })}
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
@@ -249,7 +254,7 @@ export function ContextMenu({
     >
       <div className="truncate px-2 py-1 text-[var(--font-tag)] text-[var(--text-dim)]">
         {node.display_name || node.name}
-        {missing ? ' · 路径不存在' : ''}
+        {missing ? ` · ${t('tree.pathMissing')}` : ''}
       </div>
 
       {actions.map((action) => (
@@ -281,7 +286,7 @@ export function ContextMenu({
             <span className="w-4 shrink-0 text-[var(--text-dim)]">{action.icon}</span>
             <span className="flex-1 truncate">{action.label}</span>
             {action.disabled && isVirtualGroup && action.id === 'copy' ? (
-              <span className="text-[var(--font-tag)]">虚拟分组</span>
+              <span className="text-[var(--font-tag)]">{t('tree.virtualGroup')}</span>
             ) : null}
           </button>
         </div>
@@ -290,8 +295,12 @@ export function ContextMenu({
       {/* §9.8 — picking a colour keeps the menu open so several can be compared. */}
       <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
       <div className="px-2 py-1">
-        <div className="mb-1 text-[var(--font-tag)] text-[var(--text-dim)]">颜色</div>
-        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="节点颜色">
+        <div className="mb-1 text-[var(--font-tag)] text-[var(--text-dim)]">{t('tree.color')}</div>
+        <div
+          className="flex flex-wrap items-center gap-1"
+          role="group"
+          aria-label={t('tree.nodeColor')}
+        >
           {NODE_COLORS.map((entry) => (
             <button
               key={entry.id}
@@ -299,8 +308,8 @@ export function ContextMenu({
               role="menuitemradio"
               data-color={entry.id}
               aria-checked={currentColor === entry.value}
-              aria-label={`颜色 ${entry.label}`}
-              title={entry.label}
+              aria-label={t(nodeColorKey(entry.id))}
+              title={t(nodeColorKey(entry.id))}
               className="focus-ring h-4 w-4 shrink-0 rounded-full border-2"
               style={{
                 background: entry.value,
@@ -317,7 +326,7 @@ export function ContextMenu({
             role="menuitemradio"
             data-color="none"
             aria-checked={currentColor === null}
-            title="不使用自定义颜色"
+            title={t('tree.noCustomColor')}
             className={`btn h-4 shrink-0 px-1.5 py-0 text-[10px] focus-ring ${
               currentColor === null ? 'btn-primary' : ''
             }`}
@@ -326,7 +335,7 @@ export function ContextMenu({
               onChangeColor?.(node, null)
             }}
           >
-            默认
+            {t('color.none')}
           </button>
         </div>
       </div>

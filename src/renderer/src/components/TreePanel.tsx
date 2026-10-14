@@ -22,7 +22,8 @@ import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 import { useEvents } from '@renderer/stores/events'
 import { formatRelativeTime } from '@renderer/lib/format'
-import { descendantIds } from '@renderer/lib/tree'
+import { t, tCount } from '@renderer/lib/i18n'
+import { descendantIds, kindLabel } from '@renderer/lib/tree'
 
 /* ---------------------------------------------------------------------------
  * TreePanel — the left column (§9.1).
@@ -36,13 +37,6 @@ import { descendantIds } from '@renderer/lib/tree'
  * could read back, so a failed IPC call surfaces in the StatusBar instead of
  * leaving the UI out of sync.
  * ------------------------------------------------------------------------ */
-
-const KIND_LABEL: Record<string, string> = {
-  group: '分组',
-  project: '项目',
-  folder: '文件夹',
-  note: '备注'
-}
 
 /** One confirmation dialog serves every destructive action in this panel. */
 interface PendingConfirm {
@@ -79,7 +73,7 @@ export function TreePanel(): JSX.Element {
     try {
       setRoots(await window.hub.roots.list())
     } catch (err) {
-      setStatus(`读取根目录失败：${String(err)}`, 'error')
+      setStatus(t('tree.rootsLoadFailed', { error: String(err) }), 'error')
     }
   }, [setStatus])
 
@@ -106,7 +100,7 @@ export function TreePanel(): JSX.Element {
     async (picked: string) => {
       const clean = picked.trim().replace(/[\\/]+$/, '')
       if (clean === '') {
-        setStatus('请输入一个文件夹路径', 'warn')
+        setStatus(t('tree.needPath'), 'warn')
         return
       }
       setBusy(true)
@@ -122,12 +116,12 @@ export function TreePanel(): JSX.Element {
         await useTree.getState().load()
         setStatus(
           already
-            ? `这个文件夹已经是根目录了：${root.path}`
-            : `已添加根目录：${root.path}，正在扫描…`,
+            ? t('tree.rootAlready', { path: root.path })
+            : t('tree.rootAdded', { path: root.path }),
           already ? 'warn' : 'info'
         )
       } catch (err) {
-        setStatus(`添加根目录失败：${String(err)}`, 'error')
+        setStatus(t('tree.rootAddFailed', { error: String(err) }), 'error')
       } finally {
         setBusy(false)
         setScanProgress(null)
@@ -144,15 +138,15 @@ export function TreePanel(): JSX.Element {
    */
   const pickRoot = useCallback(async () => {
     try {
-      setStatus('请在系统窗口里选择一个文件夹…', 'info')
+      setStatus(t('tree.pickPrompt'), 'info')
       const picked = await window.hub.roots.pick()
       if (!picked) {
-        setStatus('没有选择文件夹。如果系统窗口没有出现，请用「手动输入路径」添加。', 'warn')
+        setStatus(t('tree.pickCancelled'), 'warn')
         return
       }
       await addRoot(picked)
     } catch (err) {
-      setStatus(`打开文件夹选择框失败：${String(err)}。可以改用「手动输入路径」。`, 'error')
+      setStatus(t('tree.pickFailed', { error: String(err) }), 'error')
     }
   }, [addRoot, setStatus])
 
@@ -160,7 +154,7 @@ export function TreePanel(): JSX.Element {
     async (rootId?: number) => {
       const target = rootId ?? roots[0]?.id
       if (target == null) {
-        setStatus('请先添加一个根目录', 'warn')
+        setStatus(t('tree.needRoot'), 'warn')
         return
       }
       try {
@@ -168,11 +162,15 @@ export function TreePanel(): JSX.Element {
         const result = await window.hub.roots.rescan(target, false)
         await refreshRoots()
         setStatus(
-          `扫描完成：${result.projects} 个项目、${result.folders} 个文件夹，用时 ${result.elapsedMs} ms`,
+          t('tree.scanDone', {
+            projects: result.projects,
+            folders: result.folders,
+            ms: result.elapsedMs
+          }),
           'info'
         )
       } catch (err) {
-        setStatus(`扫描失败：${String(err)}`, 'error')
+        setStatus(t('tree.scanFailed', { error: String(err) }), 'error')
       } finally {
         setBusy(false)
         setScanProgress(null)
@@ -184,16 +182,18 @@ export function TreePanel(): JSX.Element {
   const newGroup = useCallback(async () => {
     const parent = selectedNode && selectedNode.kind === 'group' ? selectedNode.id : null
     try {
-      const name = `新分组 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+      const name = t('tree.newGroupName', {
+        time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+      })
       const id = await window.hub.nodes.createGroup(name, parent)
       await useTree.getState().load()
       const store = useTree.getState()
       if (parent != null) store.setOpen(parent, true)
       select(id)
       setScrollToId(id)
-      setStatus('已创建分组，可在右侧「属性」里改名称与标注', 'info')
+      setStatus(t('tree.groupCreated'), 'info')
     } catch (err) {
-      setStatus(`创建分组失败：${String(err)}`, 'error')
+      setStatus(t('tree.groupCreateFailed', { error: String(err) }), 'error')
     }
   }, [select, selectedNode, setStatus])
 
@@ -203,9 +203,9 @@ export function TreePanel(): JSX.Element {
         await window.hub.roots.remove(root.id)
         await refreshRoots()
         await useTree.getState().load()
-        setStatus(`已移除根目录：${root.path}（磁盘文件未做任何改动）`, 'info')
+        setStatus(t('tree.rootRemoved', { path: root.path }), 'info')
       } catch (err) {
-        setStatus(`移除根目录失败：${String(err)}`, 'error')
+        setStatus(t('tree.rootRemoveFailed', { error: String(err) }), 'error')
       }
     },
     [refreshRoots, setStatus]
@@ -218,7 +218,7 @@ export function TreePanel(): JSX.Element {
         await refreshRoots()
         await useTree.getState().load()
       } catch (err) {
-        setStatus(`切换根目录启用状态失败：${String(err)}`, 'error')
+        setStatus(t('tree.rootToggleFailed', { error: String(err) }), 'error')
       }
     },
     [refreshRoots, setStatus]
@@ -231,9 +231,9 @@ export function TreePanel(): JSX.Element {
       try {
         await window.hub.nodes.remove(id)
         await useTree.getState().load()
-        setStatus('已从库中移除（磁盘文件未做任何改动）', 'info')
+        setStatus(t('tree.nodeRemoved'), 'info')
       } catch (err) {
-        setStatus(`移除失败：${String(err)}`, 'error')
+        setStatus(t('tree.removeFailed', { error: String(err) }), 'error')
       }
     },
     [setStatus]
@@ -250,9 +250,9 @@ export function TreePanel(): JSX.Element {
       const id = (event as CustomEvent<number | undefined>).detail
       if (typeof id !== 'number') return
       setPending({
-        title: '从库中移除',
-        message: '这只会删除本程序中的记录，磁盘上的文件不会被修改。确认移除？',
-        confirmLabel: '移除',
+        title: t('tree.removeFromLibrary'),
+        message: t('tree.removeNodeConfirm'),
+        confirmLabel: t('tree.remove'),
         run: () => void removeNode(id)
       })
     }
@@ -263,7 +263,7 @@ export function TreePanel(): JSX.Element {
   const createChildGroup = useCallback(
     async (parent: TreeNode) => {
       try {
-        const id = await window.hub.nodes.createGroup('新建分组', parent.id)
+        const id = await window.hub.nodes.createGroup(t('tree.newGroup'), parent.id)
         await useTree.getState().load()
         /* Reveal the new child, then start the §8.3 inline rename in place. */
         useTree.getState().setOpen(parent.id, true)
@@ -273,7 +273,7 @@ export function TreePanel(): JSX.Element {
           window.dispatchEvent(new CustomEvent('hub:rename', { detail: id }))
         }, 0)
       } catch (err) {
-        setStatus(`新建分组失败：${String(err)}`, 'error')
+        setStatus(t('tree.newGroupFailed', { error: String(err) }), 'error')
       }
     },
     [select, setStatus]
@@ -302,9 +302,9 @@ export function TreePanel(): JSX.Element {
       void window.hub.shell
         .openFolder(node.id)
         .then((result) => {
-          if (!result.ok) setStatus(result.error ?? '无法打开该文件夹', 'error')
+          if (!result.ok) setStatus(result.error ?? t('tree.cannotOpenFolder'), 'error')
         })
-        .catch((err: unknown) => setStatus(`打开失败：${String(err)}`, 'error'))
+        .catch((err: unknown) => setStatus(t('tree.openFailed', { error: String(err) }), 'error'))
     },
     [setStatus]
   )
@@ -313,7 +313,7 @@ export function TreePanel(): JSX.Element {
     (node: TreeNode) => {
       void window.hub.shell
         .revealFolder(node.id)
-        .catch((err: unknown) => setStatus(`无法在文件管理器中显示：${String(err)}`, 'error'))
+        .catch((err: unknown) => setStatus(t('tree.revealFailed', { error: String(err) }), 'error'))
     },
     [setStatus]
   )
@@ -322,8 +322,10 @@ export function TreePanel(): JSX.Element {
     (node: TreeNode) => {
       void window.hub.shell
         .copyPath(node.id)
-        .then(() => setStatus('已复制路径到剪贴板', 'info'))
-        .catch((err: unknown) => setStatus(`复制路径失败：${String(err)}`, 'error'))
+        .then(() => setStatus(t('tree.pathCopied'), 'info'))
+        .catch((err: unknown) =>
+          setStatus(t('tree.copyPathFailed', { error: String(err) }), 'error')
+        )
     },
     [setStatus]
   )
@@ -340,28 +342,28 @@ export function TreePanel(): JSX.Element {
         <button
           type="button"
           className="btn btn-ghost focus-ring"
-          title="添加根目录（扫描其中的项目）"
+          title={t('tree.addRootTitle')}
           disabled={busy}
           onClick={() => void pickRoot()}
         >
           <Plus size={14} aria-hidden />
-          根目录
+          {t('tree.root')}
         </button>
         <button
           type="button"
           className="btn btn-ghost focus-ring"
-          title="在当前选中项下新建虚拟分组"
+          title={t('tree.newGroupTitle')}
           onClick={() => void newGroup()}
         >
           <FolderPlus size={14} aria-hidden />
-          分组
+          {t('kind.group')}
         </button>
         <span className="flex-1" />
         <button
           type="button"
           className="btn btn-ghost focus-ring"
-          title="展开全部"
-          aria-label="展开全部"
+          title={t('tree.expandAll')}
+          aria-label={t('tree.expandAll')}
           onClick={() => toggleAll(true)}
         >
           <ChevronsUpDown size={14} aria-hidden />
@@ -369,8 +371,8 @@ export function TreePanel(): JSX.Element {
         <button
           type="button"
           className="btn btn-ghost focus-ring"
-          title="折叠全部"
-          aria-label="折叠全部"
+          title={t('tree.collapseAll')}
+          aria-label={t('tree.collapseAll')}
           onClick={() => toggleAll(false)}
         >
           <ChevronsDownUp size={14} aria-hidden />
@@ -378,8 +380,8 @@ export function TreePanel(): JSX.Element {
         <button
           type="button"
           className="btn btn-ghost focus-ring"
-          title="重新扫描根目录（Ctrl/Cmd + R）"
-          aria-label="重新扫描"
+          title={t('tree.rescanTitle')}
+          aria-label={t('tree.rescan')}
           disabled={busy}
           onClick={() => void rescan()}
         >
@@ -397,7 +399,7 @@ export function TreePanel(): JSX.Element {
         <div className="shrink-0 px-2 py-1 text-[var(--font-tag)] text-[var(--text-dim)]">
           <div className="flex items-center gap-1.5">
             <ScanLine size={12} aria-hidden />
-            已扫描 {scanProgress.scanned} 个目录
+            {tCount('tree.scannedCountOne', 'tree.scannedCount', scanProgress.scanned)}
             <span className="truncate">{scanProgress.current}</span>
           </div>
           <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[var(--hover)]">
@@ -414,9 +416,9 @@ export function TreePanel(): JSX.Element {
       ) : nodes.length === 0 && !scanProgress ? (
         <EmptyState
           className="min-h-0 flex-1"
-          title="还没有索引任何项目"
-          description="添加一个根目录，程序会扫描其中的项目与文件夹。程序只读取磁盘，不会写入被索引的目录。"
-          actionLabel="添加根目录"
+          title={t('tree.emptyTitle')}
+          description={t('tree.emptyDescription')}
+          actionLabel={t('tree.addRoot')}
           onAction={() => void pickRoot()}
         />
       ) : (
@@ -435,7 +437,7 @@ export function TreePanel(): JSX.Element {
           onClick={() => setShowRoots((v) => !v)}
         >
           <FolderInput size={13} aria-hidden />
-          根目录管理（{roots.length}）
+          {t('tree.rootManage', { n: roots.length })}
           <span className="flex-1" />
           <ChevronDown
             size={13}
@@ -454,7 +456,7 @@ export function TreePanel(): JSX.Element {
                 <input
                   type="checkbox"
                   className="focus-ring"
-                  aria-label={`启用 ${root.path}`}
+                  aria-label={t('tree.enableRoot', { path: root.path })}
                   checked={root.enabled === 1}
                   onChange={() => void toggleRoot(root)}
                 />
@@ -463,14 +465,17 @@ export function TreePanel(): JSX.Element {
                     {root.path}
                   </span>
                   <span className="text-[var(--font-tag)] text-[var(--text-dim)]">
-                    深度 {root.max_depth} · 添加于 {formatRelativeTime(root.added_at)}
+                    {t('tree.rootDepthAdded', {
+                      depth: root.max_depth,
+                      time: formatRelativeTime(root.added_at)
+                    })}
                   </span>
                 </span>
                 <button
                   type="button"
                   className="btn btn-ghost focus-ring"
-                  title="重新扫描此根目录"
-                  aria-label={`重新扫描 ${root.path}`}
+                  title={t('tree.rescanRoot')}
+                  aria-label={t('tree.rescanRootLabel', { path: root.path })}
                   onClick={() => void rescan(root.id)}
                 >
                   <RefreshCw size={12} aria-hidden />
@@ -478,13 +483,13 @@ export function TreePanel(): JSX.Element {
                 <button
                   type="button"
                   className="btn btn-ghost focus-ring"
-                  title="从库中移除（不会删除磁盘文件）"
-                  aria-label={`移除 ${root.path}`}
+                  title={t('tree.removeRootHint')}
+                  aria-label={t('tree.removeLabel', { path: root.path })}
                   onClick={() =>
                     setPending({
-                      title: '移除根目录',
-                      message: `移除「${root.path}」只会删除本程序中的索引记录，磁盘上的文件不会被修改。确认移除？`,
-                      confirmLabel: '移除',
+                      title: t('tree.removeRoot'),
+                      message: t('tree.removeRootConfirm', { path: root.path }),
+                      confirmLabel: t('tree.remove'),
                       run: () => void removeRoot(root)
                     })
                   }
@@ -495,7 +500,7 @@ export function TreePanel(): JSX.Element {
             ))}
             {roots.length === 0 ? (
               <li className="px-1 py-1 text-[var(--font-minor)] text-[var(--text-dim)]">
-                尚未添加根目录
+                {t('tree.noRoots')}
               </li>
             ) : null}
           </ul>
@@ -510,7 +515,7 @@ export function TreePanel(): JSX.Element {
             aria-expanded={manualOpen}
             onClick={() => setManualOpen((v) => !v)}
           >
-            {manualOpen ? '收起手动输入' : '手动输入路径…'}
+            {manualOpen ? t('tree.manualCollapse') : t('tree.manualExpand')}
           </button>
           {manualOpen ? (
             <form
@@ -526,8 +531,8 @@ export function TreePanel(): JSX.Element {
                 className="input focus-ring min-w-0 flex-1 text-[var(--font-minor)]"
                 type="text"
                 value={manualPath}
-                placeholder="C:\Users\你\Desktop\项目"
-                aria-label="根目录路径"
+                placeholder={t('tree.pathPlaceholder')}
+                aria-label={t('tree.rootPathLabel')}
                 spellCheck={false}
                 onChange={(e) => setManualPath(e.target.value)}
               />
@@ -536,7 +541,7 @@ export function TreePanel(): JSX.Element {
                 className="btn btn-primary focus-ring"
                 disabled={busy || manualPath.trim() === ''}
               >
-                添加
+                {t('tree.add')}
               </button>
             </form>
           ) : null}
@@ -551,7 +556,7 @@ export function TreePanel(): JSX.Element {
           aria-expanded={showHeatmap}
           onClick={() => setShowHeatmap((v) => !v)}
         >
-          改动热力图
+          {t('tree.heatmap')}
           <span className="flex-1" />
           <ChevronDown
             size={13}
@@ -573,8 +578,10 @@ export function TreePanel(): JSX.Element {
           style={{ borderColor: 'var(--border)' }}
           title={selectedNode.path ?? undefined}
         >
-          已选：{KIND_LABEL[selectedNode.kind] ?? selectedNode.kind} ·{' '}
-          {selectedNode.display_name || selectedNode.name}
+          {t('tree.selected', {
+            kind: kindLabel(selectedNode.kind),
+            name: selectedNode.display_name || selectedNode.name
+          })}
         </div>
       ) : null}
 

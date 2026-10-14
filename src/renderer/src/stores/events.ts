@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { DayCount, EventFilter, HubEvent } from '@shared/types'
+import { t } from '@renderer/lib/i18n'
 
 /* ---------------------------------------------------------------------------
  * events.ts — the timeline's data, its filter and the heatmap grid.
@@ -72,7 +73,7 @@ export const useEvents = create<EventsState>()((set, get) => ({
       const events = await hub.events.list({ limit: 5000, ...get().filter })
       set({ events, loading: false, error: null })
     } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : '读取改动记录失败' })
+      set({ loading: false, error: err instanceof Error ? err.message : t('error.eventsLoad') })
     }
   },
 
@@ -84,7 +85,7 @@ export const useEvents = create<EventsState>()((set, get) => ({
       const days = await hub.events.heatmap(from, to)
       set({ heatmap: days.slice(0, HEATMAP_LIMIT) })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : '读取热力图失败' })
+      set({ error: err instanceof Error ? err.message : t('error.heatmapLoad') })
     }
   },
 
@@ -99,7 +100,7 @@ export const useEvents = create<EventsState>()((set, get) => ({
       await get().load()
       return result
     } catch (err) {
-      const message = err instanceof Error ? err.message : '同步 Git 失败'
+      const message = err instanceof Error ? err.message : t('error.gitSync')
       set({ error: message })
       throw err instanceof Error ? err : new Error(message)
     }

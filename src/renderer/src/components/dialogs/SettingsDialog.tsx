@@ -4,6 +4,7 @@ import { SETTING_KEYS } from '@shared/types'
 import type { AppInfo, BackgroundImage } from '@renderer/env'
 import type { ThemePref } from '@renderer/lib/theme'
 import { formatBytes, formatDateTime, formatDuration, formatRelativeTime } from '@renderer/lib/format'
+import { getLang, LANGUAGES, setLang, t, type Lang } from '@renderer/lib/i18n'
 import { useUi } from '@renderer/stores/ui'
 import Modal from '@renderer/components/dialogs/Modal'
 
@@ -18,18 +19,18 @@ export interface SettingsDialogProps {
   onClose(): void
 }
 
-const THEME_OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-  { value: 'system', label: '跟随系统' }
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemePref; key: string }> = [
+  { value: 'light', key: 'settings.themeLight' },
+  { value: 'dark', key: 'settings.themeDark' },
+  { value: 'system', key: 'settings.themeSystem' }
 ]
 
 const TASK_LABELS: Record<string, string> = {
-  rescan: '重新扫描',
-  'git-sync': 'Git 同步',
-  snapshot: '数据库快照',
-  prune: '清理旧记录',
-  'size-sweep': '大小补算'
+  rescan: 'settings.taskRescan',
+  'git-sync': 'settings.taskGitSync',
+  snapshot: 'settings.taskSnapshot',
+  prune: 'settings.taskPrune',
+  'size-sweep': 'settings.taskSizeSweep'
 }
 
 export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
@@ -48,6 +49,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
   const [hideToTray, setHideToTray] = useState(true)
   const [autoLaunch, setAutoLaunch] = useState(false)
   const [busy, setBusy] = useState(false)
+  /* §9.10 — the language currently in force; picking one remounts the shell. */
+  const [lang, setLangState] = useState<Lang>(() => getLang())
 
   /* --- initial load: app info, settings flags, background image ------------ */
   useEffect(() => {
@@ -69,7 +72,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
         setBackground(status)
       })
       .catch(() => {
-        if (alive) setStatus('读取设置失败', 'error')
+        if (alive) setStatus(t('error.settingsLoad'), 'error')
       })
     return () => {
       alive = false
@@ -80,9 +83,23 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
     (key: string, value: string): void => {
       void window.hub?.settings
         .set(key, value)
-        .catch(() => setStatus('保存设置失败', 'error'))
+        .catch(() => setStatus(t('error.settingsSave'), 'error'))
     },
     [setStatus]
+  )
+
+  /**
+   * §9.10 — switching language is immediate (the shell remounts through
+   * `App.tsx`) and persisted, so the choice survives a restart and reaches the
+   * main process, which relabels the tray menu.
+   */
+  const onPickLanguage = useCallback(
+    (next: Lang): void => {
+      setLangState(next)
+      setLang(next)
+      writeSetting(SETTING_KEYS.language, next)
+    },
+    [writeSetting]
   )
 
   const onChooseBackground = useCallback((): void => {
@@ -94,7 +111,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .then((res) => {
         if (res.ok && res.image) {
           setImage(res.image)
-          setStatus('已设置背景图片', 'info')
+          setStatus(t('settings.backgroundSet'), 'info')
         } else if (res.error) {
           setStatus(res.error, 'error')
         }
@@ -110,9 +127,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .clear()
       .then(() => {
         setImage({ filename: null, origin: null, bytes: null })
-        setStatus('已清除背景图片', 'info')
+        setStatus(t('settings.backgroundCleared'), 'info')
       })
-      .catch(() => setStatus('清除背景图片失败', 'error'))
+      .catch(() => setStatus(t('settings.backgroundClearFailed'), 'error'))
       .finally(() => setBusy(false))
   }, [setStatus])
 
@@ -126,9 +143,12 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .then(() => hub.background.status())
       .then((status) => {
         setBackground(status)
-        setStatus(status.paused ? '后台维护已暂停' : '后台维护已继续', 'info')
+        setStatus(
+          status.paused ? t('settings.maintenancePaused') : t('settings.maintenanceResumed'),
+          'info'
+        )
       })
-      .catch(() => setStatus('切换后台维护状态失败', 'error'))
+      .catch(() => setStatus(t('settings.maintenanceToggleFailed'), 'error'))
       .finally(() => setBusy(false))
   }, [background, setBackground, setStatus])
 
@@ -139,11 +159,11 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
         .setAutoLaunch(next)
         .then((ok) => {
           writeSetting(SETTING_KEYS.autoLaunch, ok ? 'true' : 'false')
-          setStatus(ok ? '已开启开机自启' : '已关闭开机自启', 'info')
+          setStatus(ok ? t('settings.autoLaunchOn') : t('settings.autoLaunchOff'), 'info')
         })
         .catch(() => {
           setAutoLaunch(!next)
-          setStatus('设置开机自启失败', 'error')
+          setStatus(t('settings.autoLaunchFailed'), 'error')
         })
     },
     [setStatus, writeSetting]
@@ -153,18 +173,18 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
 
   return (
     <Modal
-      title="设置"
+      title={t('settings.title')}
       onClose={onClose}
       className="max-w-2xl"
       footer={
         <button type="button" className="btn btn-primary" onClick={onClose}>
-          完成
+          {t('settings.done')}
         </button>
       }
     >
-      <Section title="外观">
-        <Field label="主题">
-          <div className="flex gap-1" role="radiogroup" aria-label="主题">
+      <Section title={t('settings.appearance')}>
+        <Field label={t('settings.theme')}>
+          <div className="flex gap-1" role="radiogroup" aria-label={t('settings.theme')}>
             {THEME_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -174,27 +194,27 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
                 className={`btn h-6 px-2 py-0 text-[11px] ${theme === opt.value ? 'btn-primary' : ''}`}
                 onClick={() => setTheme(opt.value)}
               >
-                {opt.label}
+                {t(opt.key)}
               </button>
             ))}
           </div>
         </Field>
-        <Field label="紧凑模式">
+        <Field label={t('settings.compactMode')}>
           <Toggle
             checked={compactMode}
             onChange={setCompactMode}
-            label="使用 26px 行高"
+            label={t('settings.compactModeHint')}
           />
         </Field>
-        <Field label="背景图片">
+        <Field label={t('settings.background')}>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-[var(--text-dim)]">
               {image?.filename
                 ? `${image.filename}${image.bytes === null ? '' : ` · ${formatBytes(image.bytes)}`}`
-                : '未设置'}
+                : t('settings.notSet')}
             </span>
             <button type="button" className="btn h-6 px-2 py-0 text-[11px]" disabled={busy} onClick={onChooseBackground}>
-              选择图片
+              {t('settings.chooseImage')}
             </button>
             <button
               type="button"
@@ -202,119 +222,152 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
               disabled={busy || !image?.filename}
               onClick={onClearBackground}
             >
-              清除
+              {t('settings.clear')}
             </button>
+          </div>
+        </Field>
+        <Field label={t('settings.language')}>
+          <div className="flex gap-1" role="radiogroup" aria-label={t('settings.languageHint')}>
+            {LANGUAGES.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={lang === opt.id}
+                className={`btn h-6 px-2 py-0 text-[11px] ${lang === opt.id ? 'btn-primary' : ''}`}
+                onClick={() => onPickLanguage(opt.id)}
+              >
+                {opt.native}
+              </button>
+            ))}
           </div>
         </Field>
       </Section>
 
-      <Section title="交互">
-        <Field label="双击打开文件夹">
+      <Section title={t('settings.interaction')}>
+        <Field label={t('settings.doubleClickOpen')}>
           <Toggle
             checked={clickToOpen}
             onChange={(next) => {
               setClickToOpen(next)
               setStatus(
-                next ? '已开启双击打开文件夹' : '已关闭双击打开，双击只用于展开与折叠',
+                next ? t('settings.doubleClickOpenOn') : t('settings.doubleClickOpenOff'),
                 'info'
               )
             }}
-            label="双击打开文件夹"
+            label={t('settings.doubleClickOpen')}
           />
         </Field>
-        <Field label="关闭时隐藏到托盘">
+        <Field label={t('settings.hideToTray')}>
           <Toggle
             checked={hideToTray}
             onChange={(next) => {
               setHideToTray(next)
               writeSetting(SETTING_KEYS.hideToTray, next ? 'true' : 'false')
             }}
-            label="关闭窗口时隐藏到托盘"
+            label={t('settings.hideToTrayHint')}
           />
         </Field>
-        <Field label="开机自启">
-          <Toggle checked={autoLaunch} onChange={onToggleAutoLaunch} label="开机自启" />
+        <Field label={t('settings.autoLaunch')}>
+          <Toggle
+            checked={autoLaunch}
+            onChange={onToggleAutoLaunch}
+            label={t('settings.autoLaunch')}
+          />
         </Field>
       </Section>
 
-      <Section title="后台维护">
-        <Field label="状态">
+      <Section title={t('settings.maintenance')}>
+        <Field label={t('settings.status')}>
           <div className="flex items-center gap-2">
             <span className={`tag ${background?.paused ? 'tag-warn' : 'tag-ok'}`}>
-              {background === null ? '读取中…' : background.paused ? '已暂停' : '运行中'}
+              {background === null
+                ? t('settings.loading')
+                : background.paused
+                  ? t('settings.statusPaused')
+                  : t('settings.statusRunning')}
             </span>
             <button type="button" className="btn h-6 px-2 py-0 text-[11px]" disabled={busy} onClick={onTogglePause}>
-              {background?.paused ? '继续' : '暂停'}
+              {background?.paused ? t('settings.resume') : t('settings.pause')}
             </button>
           </div>
         </Field>
-        <Field label="下次运行">
+        <Field label={t('settings.nextRun')}>
           {nextRuns.length === 0 ? (
-            <span className="text-[11px] text-[var(--text-dim)]">暂无计划</span>
+            <span className="text-[11px] text-[var(--text-dim)]">{t('settings.noPlan')}</span>
           ) : (
             <ul className="flex flex-col gap-0.5">
               {nextRuns.map(([task, at]) => (
                 <li key={task} className="text-[11px] text-[var(--text-dim)]">
-                  {TASK_LABELS[task] ?? task}：
+                  {t('settings.nextRunTask', {
+                    task: TASK_LABELS[task] ? t(TASK_LABELS[task]) : task
+                  })}
                   <span className="text-[var(--text)]">{formatRelativeTime(at)}</span>
-                  <span className="text-[var(--text-dim)]">（{formatDuration(at - Date.now())}后）</span>
+                  <span className="text-[var(--text-dim)]">
+                    {t('settings.inDuration', { duration: formatDuration(at - Date.now()) })}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
         </Field>
         {background?.onBattery ? (
-          <Field label="电源">
-            <span className="text-[11px] text-[var(--tone-warn)]">当前由电池供电，后台维护已自动降速</span>
+          <Field label={t('settings.power')}>
+            <span className="text-[11px] text-[var(--tone-warn)]">{t('settings.onBattery')}</span>
           </Field>
         ) : null}
       </Section>
 
-      <Section title="数据">
-        <Field label="数据目录">
+      <Section title={t('settings.data')}>
+        <Field label={t('settings.dataDir')}>
           <code className="break-all text-[11px]">{info?.userData ?? '…'}</code>
         </Field>
-        <Field label="数据库">
+        <Field label={t('settings.database')}>
           <code className="break-all text-[11px]">{info?.dbPath ?? '…'}</code>
         </Field>
-        <Field label="存储引擎 / schema">
-          <span className="text-[11px]">
-            {info ? `${info.driver} · schema v${info.schemaVersion}` : '…'}
-          </span>
-        </Field>
-        <Field label="规模">
+        <Field label={t('settings.engine')}>
           <span className="text-[11px]">
             {info
-              ? `${info.roots} 个根目录 · ${info.nodes} 个节点 · ${info.events} 条改动`
+              ? t('settings.engineValue', { driver: info.driver, version: info.schemaVersion })
+              : '…'}
+          </span>
+        </Field>
+        <Field label={t('settings.scaleLabel')}>
+          <span className="text-[11px]">
+            {info
+              ? t('settings.scale', { roots: info.roots, nodes: info.nodes, events: info.events })
               : '…'}
           </span>
         </Field>
       </Section>
 
-      <Section title="数据隔离">
+      <Section title={t('settings.isolation')}>
         <p className="text-xs leading-5 text-[var(--text)]">
-          <b>所有数据都保存在本程序的 userData 目录内。</b>
-          被索引的项目文件夹始终是只读的：标注、显示名、图标、标签、笔记与改动记录只写入本程序的
-          userData 目录。
+          <b>{t('settings.isolationLead')}</b>
+          {t('settings.isolationBody')}
         </p>
         <p className="mt-1 text-xs leading-5 text-[var(--text-dim)]">
-          <b style={{ color: 'var(--st-active)' }}>本程序从不向被索引的项目目录写入任何文件。</b>
+          <b style={{ color: 'var(--st-active)' }}>{t('settings.isolationNever')}</b>
         </p>
         <p className="mt-1 text-[11px] leading-5 text-[var(--text-dim)]">
-          扫描、Git 历史读取与文件监视都以只读方式访问项目目录，不会新增、修改或删除其中的任何内容。
+          {t('settings.isolationScan')}
         </p>
       </Section>
 
-      <Section title="关于">
-        <Field label="版本">
+      <Section title={t('settings.about')}>
+        <Field label={t('settings.version')}>
           <span className="text-[11px]">
-            Project Hub {info?.version ?? '…'}（Electron {info?.electron ?? '—'} · Node {info?.node ?? '—'}）
+            {t('settings.versionValue', {
+              version: info?.version ?? '…',
+              electron: info?.electron ?? '—',
+              node: info?.node ?? '—'
+            })}
           </span>
         </Field>
-        <Field label="平台">
+        <Field label={t('settings.platform')}>
           <span className="text-[11px]">{info?.platform ?? '—'}</span>
         </Field>
-        <Field label="当前时间">
+        <Field label={t('settings.currentTime')}>
           <span className="text-[11px]">{formatDateTime(Date.now())}</span>
         </Field>
       </Section>
@@ -365,7 +418,7 @@ function Toggle({
         onChange={(e) => onChange(e.target.checked)}
         aria-label={label}
       />
-      {checked ? '开启' : '关闭'}
+      {checked ? t('settings.on') : t('settings.off')}
     </label>
   )
 }

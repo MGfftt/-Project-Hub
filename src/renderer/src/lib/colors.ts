@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { t } from './i18n'
 
 /**
  * Deterministic tag colours (§9.2 rule 5: 每个标签颜色由字符串 hash 到 HSL).
@@ -48,22 +49,26 @@ export const stringToHue = hueFromString
 export interface NodeColorDef {
   /** Stable id: used for `data-color`, aria labels and test selectors. */
   id: string
-  label: string
   value: string
 }
 
 export const NODE_COLORS: readonly NodeColorDef[] = [
-  { id: 'red', label: '红', value: '#ef4444' },
-  { id: 'orange', label: '橙', value: '#f97316' },
-  { id: 'yellow', label: '黄', value: '#eab308' },
-  { id: 'green', label: '绿', value: '#22c55e' },
-  { id: 'cyan', label: '青', value: '#06b6d4' },
-  { id: 'blue', label: '蓝', value: '#3b82f6' },
-  { id: 'purple', label: '紫', value: '#a855f7' },
-  { id: 'pink', label: '粉', value: '#ec4899' },
-  { id: 'brown', label: '棕', value: '#b45309' },
-  { id: 'gray', label: '灰', value: '#94a3b8' }
+  { id: 'red', value: '#ef4444' },
+  { id: 'orange', value: '#f97316' },
+  { id: 'yellow', value: '#eab308' },
+  { id: 'green', value: '#22c55e' },
+  { id: 'cyan', value: '#06b6d4' },
+  { id: 'blue', value: '#3b82f6' },
+  { id: 'purple', value: '#a855f7' },
+  { id: 'pink', value: '#ec4899' },
+  { id: 'brown', value: '#b45309' },
+  { id: 'gray', value: '#94a3b8' }
 ]
+
+/** The message key for a swatch label — `color.blue` and friends. */
+export function nodeColorKey(id: string): string {
+  return `color.${id}`
+}
 
 const NODE_COLOR_VALUES: ReadonlySet<string> = new Set(NODE_COLORS.map((c) => c.value))
 
@@ -84,7 +89,8 @@ export function nodeColorValue(color: string | null | undefined): string | null 
 export function nodeColorLabel(color: string | null | undefined): string | null {
   const value = nodeColorValue(color)
   if (value === null) return null
-  return NODE_COLORS.find((c) => c.value === value)?.label ?? null
+  const def = NODE_COLORS.find((c) => c.value === value)
+  return def ? t(nodeColorKey(def.id)) : null
 }
 
 /** `#rrggbb` + alpha, for the tinted chip behind an icon. */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { t } from '@renderer/lib/i18n'
 
 export interface ConfirmDialogProps {
   title: string
@@ -20,8 +21,8 @@ export interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel = '确认',
-  cancelLabel = '取消',
+  confirmLabel = t('settings.confirm'),
+  cancelLabel = t('settings.cancel'),
   danger = false,
   onConfirm,
   onCancel
