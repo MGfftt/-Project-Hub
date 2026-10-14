@@ -1,12 +1,17 @@
 /**
  * Heatmap — a GitHub-style year grid built from `hub.events.heatmap(from, to)`.
  *
- * 53 columns x 7 rows of 12px cells with 2px gaps. The whole grid is derived
- * from a single `useMemo` day -> count map, so a mouse move only re-renders the
- * one cell whose hover state changed (each cell owns its own tooltip state).
+ * 53 columns x 7 rows. The cell size is derived from the width of the column
+ * the grid is dropped into: a fixed 12px cell needs 742px, which the 400px
+ * left panel clips — the whole second half of the year, and therefore every
+ * recent change, simply fell off the edge. Cells now shrink to fit (down to
+ * MIN_CELL, with a horizontal scroll beyond that).
+ *
+ * The whole grid is derived from a single `useMemo` day -> count map, so a
+ * mouse move only re-renders the one cell whose hover state changed.
  */
 
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DayCount } from '@shared/types'
 import { useEvents } from '@renderer/stores/events'
 import { useUi } from '@renderer/stores/ui'
@@ -14,9 +19,13 @@ import { t, tCount } from '@renderer/lib/i18n'
 
 const COLS = 53
 const ROWS = 7
-const CELL = 12
-const GAP = 2
-const STEP = CELL + GAP
+/** Below this the squares stop reading as squares and the grid scrolls. */
+const MIN_CELL = 4
+const MAX_CELL = 12
+/** Gap as a fraction of the cell, GitHub-ish. */
+const GAP_RATIO = 0.2
+/** Two month labels closer than this would print on top of each other. */
+const LABEL_MIN_GAP = 26
 const DAY_MS = 86_400_000
 const WEEKDAY_KEYS = ['map.weekday.mon', 'map.weekday.wed', 'map.weekday.fri'] as const
 const MONTH_KEYS = [
@@ -39,6 +48,37 @@ export interface HeatmapProps {
   from?: number
   /** Exclusive range end (ms, i.e. Jan 1 of the following year). */
   to?: number
+}
+
+interface Metrics {
+  cell: number
+  gap: number
+  step: number
+  width: number
+  height: number
+}
+
+/**
+ * Largest grid that still fits `available` px. `cell` is clamped, so a very
+ * narrow panel produces an overflowing grid that the caller scrolls.
+ */
+function metricsFor(available: number): Metrics {
+  const width = Math.max(140, available)
+  for (let cell = MAX_CELL; cell >= MIN_CELL; cell -= 1) {
+    const gap = Math.max(1, Math.round(cell * GAP_RATIO))
+    const step = cell + gap
+    const grid = COLS * step - gap
+    if (grid <= width) return { cell, gap, step, width: grid, height: ROWS * step - gap }
+  }
+  const gap = 1
+  const step = MIN_CELL + gap
+  return {
+    cell: MIN_CELL,
+    gap,
+    step,
+    width: COLS * step - gap,
+    height: ROWS * step - gap
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -107,10 +147,20 @@ interface CellProps {
   inYear: boolean
   level: number
   entry: DayCount | undefined
+  cell: number
+  gap: number
   onPick: (day: string) => void
 }
 
-const HeatCell = memo(function HeatCell({ day, inYear, level, entry, onPick }: CellProps) {
+const HeatCell = memo(function HeatCell({
+  day,
+  inYear,
+  level,
+  entry,
+  cell,
+  gap,
+  onPick
+}: CellProps) {
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -131,12 +181,13 @@ const HeatCell = memo(function HeatCell({ day, inYear, level, entry, onPick }: C
           onPick(day)
         }
       }}
-      className="rounded-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       style={{
-        width: CELL,
-        height: CELL,
-        marginRight: GAP,
-        marginBottom: GAP,
+        width: cell,
+        height: cell,
+        marginRight: gap,
+        marginBottom: gap,
+        borderRadius: Math.max(1, Math.min(2, Math.floor(cell / 3))),
         backgroundColor: cellBackground(level),
         opacity: inYear ? 1 : 0,
         outline: hovered && inYear ? '1px solid var(--text-dim)' : 'none',
@@ -163,6 +214,30 @@ export default function Heatmap({ from, to }: HeatmapProps) {
   const rangeTo = to ?? startOfYear(year + 1)
   const showYearSelector = from === undefined && to === undefined
 
+  /* --- how much room do we actually have? -------------------------- */
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [boxWidth, setBoxWidth] = useState(0)
+
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const measure = (): void => setBoxWidth(el.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const metrics = useMemo(() => metricsFor(boxWidth || 320), [boxWidth])
+
+  /* Once the grid overflows, the newest weeks matter most — start there. */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = el.scrollWidth
+  }, [metrics.step])
+
   useEffect(() => {
     void loadHeatmap(rangeFrom, rangeTo).catch(() => undefined)
   }, [loadHeatmap, rangeFrom, rangeTo])
@@ -177,6 +252,10 @@ export default function Heatmap({ from, to }: HeatmapProps) {
   const origin = useMemo(() => gridOrigin(year), [year])
 
   const columns = useMemo(() => {
+    /* A narrow panel cannot print twelve month ticks without them touching,
+       so label every Nth month — a regular cadence reads better than an
+       irregular skip. */
+    const stride = Math.max(1, Math.ceil((12 * LABEL_MIN_GAP) / metrics.width))
     const cols: Array<{
       key: string
       labelKey: string
@@ -184,22 +263,33 @@ export default function Heatmap({ from, to }: HeatmapProps) {
       labelLeft: number | null
       cells: Array<{ day: string; inYear: boolean }>
     }> = []
-    let lastLabelKey = ''
+    let lastDrawn = ''
+    let lastLeft = -Infinity
     for (let col = 0; col < COLS; col += 1) {
       const cells: Array<{ day: string; inYear: boolean }> = []
       let labelKey = ''
       for (let row = 0; row < ROWS; row += 1) {
         const d = cellDate(origin, col, row)
         const inYear = d.getFullYear() === year
-        if (row === 0) labelKey = MONTH_KEYS[d.getMonth()]
+        /* The tick names the month of the week's first day, and only weeks
+           that start inside the shown year get one — otherwise the leading
+           days of the previous December carry a bogus 12月 that then collides
+           with January's. */
+        if (row === 0 && inYear && d.getMonth() % stride === 0) {
+          labelKey = MONTH_KEYS[d.getMonth()]
+        }
         cells.push({ day: dayKey(d), inYear })
       }
-      const labelLeft = labelKey !== lastLabelKey ? col * STEP : null
-      lastLabelKey = labelKey
-      cols.push({ key: `col-${col}`, labelKey, labelLeft, cells })
+      const left = col * metrics.step
+      const draw = labelKey !== '' && labelKey !== lastDrawn && left - lastLeft >= LABEL_MIN_GAP
+      if (draw) {
+        lastDrawn = labelKey
+        lastLeft = left
+      }
+      cols.push({ key: `col-${col}`, labelKey, labelLeft: draw ? left : null, cells })
     }
     return cols
-  }, [origin, year])
+  }, [origin, year, metrics.step, metrics.width])
 
   const totalCount = useMemo(
     () => heatmap.reduce((sum, d) => sum + (d.count > 0 ? d.count : 0), 0),
@@ -223,12 +313,11 @@ export default function Heatmap({ from, to }: HeatmapProps) {
     return [current, current - 1, current - 2]
   }, [])
 
-  const gridWidth = COLS * STEP
-  const gridHeight = ROWS * STEP
+  const { cell, gap, width: gridWidth, height: gridHeight } = metrics
 
   return (
     <section
-      className="inline-flex flex-col gap-2 text-[var(--text)]"
+      className="flex w-full min-w-0 flex-col gap-2 text-[var(--text)]"
       aria-label={t('map.heatmap.label')}
     >
       <header className="flex items-center gap-2">
@@ -256,14 +345,14 @@ export default function Heatmap({ from, to }: HeatmapProps) {
         </span>
       </header>
 
-      <div className="flex gap-2">
+      <div className="flex w-full min-w-0 gap-2">
         {/* weekday labels: 一 / 三 / 五 sit on rows 1, 3 and 5 */}
-        <div className="flex flex-col pt-4 text-[10px] leading-none text-[var(--text-dim)]">
+        <div className="flex shrink-0 flex-col pt-4 text-[10px] leading-none text-[var(--text-dim)]">
           {Array.from({ length: ROWS }, (_, row) => (
             <span
               key={row}
               className="flex items-center"
-              style={{ height: CELL, marginBottom: GAP, fontSize: 9 }}
+              style={{ height: cell, marginBottom: gap, fontSize: 9 }}
             >
               {row === 1
                 ? t(WEEKDAY_KEYS[0])
@@ -276,62 +365,72 @@ export default function Heatmap({ from, to }: HeatmapProps) {
           ))}
         </div>
 
-        <div className="flex flex-col">
-          {/* month labels: first column of each new month */}
-          <div className="relative mb-1 h-3" style={{ width: gridWidth }}>
-            {columns.map((col) =>
-              col.labelLeft === null ? null : (
-                <span
-                  key={col.key}
-                  className="absolute top-0 text-[10px] leading-none text-[var(--text-dim)]"
-                  style={{ left: col.labelLeft }}
-                >
-                  {t(col.labelKey)}
-                </span>
-              )
-            )}
-          </div>
+        <div ref={boxRef} className="min-w-0 flex-1">
+          <div ref={scrollRef} className="overflow-x-auto">
+            <div className="flex flex-col" style={{ width: gridWidth }}>
+              {/* month labels: first column of each new month */}
+              <div className="relative mb-1 h-3" style={{ width: gridWidth }}>
+                {columns.map((col) =>
+                  col.labelLeft === null ? null : (
+                    <span
+                      key={col.key}
+                      className="absolute top-0 text-[10px] leading-none text-[var(--text-dim)]"
+                      style={{ left: col.labelLeft }}
+                    >
+                      {t(col.labelKey)}
+                    </span>
+                  )
+                )}
+              </div>
 
-          {empty ? (
-            <p
-              className="grid place-items-center rounded-md border border-dashed border-[var(--border)] text-[11px] text-[var(--text-dim)]"
-              style={{ width: gridWidth, height: gridHeight }}
-            >
-              {t('map.heatmap.empty')}
-            </p>
-          ) : (
-            <div
-              className="flex"
-              style={{ width: gridWidth, height: gridHeight }}
-              role="grid"
-              aria-label={t('map.heatmap.gridLabel', { year })}
-            >
-              {columns.map((col) => (
-                <div key={col.key} className="flex flex-col" role="rowgroup">
-                  {col.cells.map((cell) => (
-                    <HeatCell
-                      key={cell.day}
-                      day={cell.day}
-                      inYear={cell.inYear}
-                      level={cell.inYear ? levelOf(byDay.get(cell.day)?.count ?? 0) : 0}
-                      entry={byDay.get(cell.day)}
-                      onPick={onPick}
-                    />
+              {empty ? (
+                <p
+                  className="grid place-items-center rounded-md border border-dashed border-[var(--border)] text-[11px] text-[var(--text-dim)]"
+                  style={{ width: gridWidth, height: gridHeight }}
+                >
+                  {t('map.heatmap.empty')}
+                </p>
+              ) : (
+                <div
+                  className="flex"
+                  style={{ width: gridWidth, height: gridHeight }}
+                  role="grid"
+                  aria-label={t('map.heatmap.gridLabel', { year })}
+                >
+                  {columns.map((col) => (
+                    <div key={col.key} className="flex flex-col" role="rowgroup">
+                      {col.cells.map((c) => (
+                        <HeatCell
+                          key={c.day}
+                          day={c.day}
+                          inYear={c.inYear}
+                          level={c.inYear ? levelOf(byDay.get(c.day)?.count ?? 0) : 0}
+                          entry={byDay.get(c.day)}
+                          cell={cell}
+                          gap={gap}
+                          onPick={onPick}
+                        />
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      <footer className="flex items-center gap-2 pl-6 text-[10px] text-[var(--text-dim)]">
+      <footer className="flex items-center gap-2 pl-4 text-[10px] text-[var(--text-dim)]">
         <span>{t('map.heatmap.less')}</span>
         {LEVELS.map((_, level) => (
           <span
             key={level}
-            className="rounded-[2px]"
-            style={{ width: CELL, height: CELL, backgroundColor: cellBackground(level) }}
+            style={{
+              width: cell,
+              height: cell,
+              borderRadius: Math.max(1, Math.min(2, Math.floor(cell / 3))),
+              backgroundColor: cellBackground(level)
+            }}
             aria-hidden
           />
         ))}

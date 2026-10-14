@@ -226,7 +226,13 @@ project-hub/
 
 > 如果升级之前把一个项目拖进过分组，升级后可能会看到同一个项目出现两次（旧版本会把它的所属根目录清空，扫描时就当作新文件夹又建了一条）。现在删除是持久的，删掉多余的那一条即可，剩下的那条保持在原来的分组里。
 
-**界面语言**：设置里的「语言」一行可以在「中文」和「English」之间切换，切完整个窗口立刻重绘——左树、全景图、右键菜单、属性面板、状态栏全都跟着换，**不用重启**。托盘菜单和程序弹出的错误提示用的是同一个设置。选择保存在本地的 `language` 设置项里，下次启动仍然是它；默认值是中文。
+**界面语言**：所有设置都在**主界面上方工具栏最右边的「设置」按钮**里（也可以按 `Ctrl` + `,`）。设置里的「语言」一行可以在「中文」和「English」之间切换，切完整个窗口立刻重绘——左树、全景图、右键菜单、属性面板、状态栏全都跟着换，**不用重启**。托盘菜单和程序弹出的错误提示用的是同一个设置。选择保存在本地的 `language` 设置项里，下次启动仍然是它；默认值是中文。
+
+**改动热力图**：左树底部的「改动热力图」展开是一整年的格子图，格子的尺寸跟着面板宽度走——面板窄了格子就变小，一年 53 列始终完整显示，不会像以前那样把后半年的格子挤出面板外面。鼠标悬停能看到当天改了几个文件、加减多少行，单击格子会把时间线过滤到那一天。月份标签也随宽度调整密度（窄面板每两个月标一个），不会互相压在一起。
+
+![改动热力图：格子随面板宽度缩放，一整年 53 列都留在面板里](docs/screenshots/heatmap-zh.png)
+
+*改动热力图——面板只有 320 px 宽时，格子缩到 4 px，月份标签隔一个标一次，一年仍然完整可见。*
 
 ![设置对话框：主题、紧凑模式、背景图片、语言、交互和后台维护](docs/screenshots/settings-zh.png)
 
@@ -440,7 +446,9 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 
 > If you dragged a project into a group *before* this version, you may see that project twice after upgrading: the old code cleared the node's owning root, so the scanner saw the same folder as new and inserted a second row. Deleting is permanent now — remove the extra row and the remaining one stays in its group.
 
-**Interface language.** The Language row in Settings switches between 中文 and English, and the whole window redraws at once — tree, map, context menus, properties panel and status bar, with **no restart**. The tray menu and the app's error dialogs read the same setting. The choice is stored in the local `language` setting and survives a restart; the default is Chinese.
+**Interface language.** Every setting lives behind the **Settings button at the right end of the toolbar above the main view** (or press `Ctrl` + `,`). The Language row switches between 中文 and English, and the whole window redraws at once — tree, map, context menus, properties panel and status bar, with **no restart**. The tray menu and the app's error dialogs read the same setting. The choice is stored in the local `language` setting and survives a restart; the default is Chinese.
+
+**Change heatmap.** The 改动热力图 section at the bottom of the tree column expands into a full year of cells whose size follows the panel width: narrow the panel and the squares shrink, so all 53 columns of the year stay visible instead of the back half being pushed outside the panel. Hovering a cell reports how many files changed that day and by how many lines; clicking one filters the timeline to that day. Month ticks thin out with the panel too (every other month when it is narrow) instead of printing on top of each other.
 
 ![The settings dialog: theme, compact mode, background image, language, interaction and maintenance](docs/screenshots/settings-en.png)
 

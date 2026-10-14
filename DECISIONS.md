@@ -68,7 +68,7 @@ Vitest runs under plain Node, so without the fallback the entire DB layer — an
 
 ---
 
-## D-005 · The built-in icon set is 45 hand-authored glyphs, not §8.4's 60 lucide names
+## D-005 · The built-in icon set is 46 hand-authored glyphs, not §8.4's 60 lucide names
 
 **Decision.** `src/shared/icons.ts` ships 46 glyphs as raw SVG path data and is the first source consulted for any icon. The remaining names in the frozen §8.4 list are resolved from a static table in `src/renderer/src/lib/lucideIcons.ts` (see D-011).
 
@@ -413,5 +413,31 @@ Two upstream explanations were checked and are *not* the whole story here: this 
 **Cost.** Two languages to keep in step, and about 2,900 CJK characters moved behind keys across six part files and two runtimes. Count-bearing English strings need a singular twin and a `tCount` call; translations are written as full sentences per key, so a sentence that only differs by a trailing space needs that space written into the entry (`settings.inDuration` is `' in {duration}'`).
 
 **Lesson.** A language switch is really a remount. Because strings are resolved at call time from module scope, nothing re-renders by itself; keying the shell on the language is one line and removes the entire "some labels did not update" class of bug.
+
+---
+
+## D-028 · The heatmap measures its column; settings get a visible button
+
+**Context.** Two defects reported against the shipped build, both about something being off-screen.
+
+The year heatmap in the tree column was built with fixed 12px cells and a 2px gap: `COLS * STEP = 53 × 14 = 742px`. The column it lives in is 240–480px. Measured on the real database: `gridWidth 742`, `gridLeft 25`, `right 767`, while the flex row around it was `759px` wide inside a ~330px panel — the grid overflowed its container and the panel clipped it. Everything from roughly July onward was invisible, including *all* of the recent activity, so the heatmap looked empty exactly when a user had been busy. The month ticks were also printed at `col * STEP` with no collision rule, so in a 53-column year the week of Dec 28 carried a `12月` tick 14px from January's `1月` and the two drew on top of each other.
+
+The settings dialog had no entry point in the interface at all — only the `Ctrl` + `,` shortcut — so a user looking for it had nowhere to click.
+
+**Decision.**
+
+1. **The cell size is derived from the column, not fixed.** `metricsFor(available)` walks `cell` down from 12 to `MIN_CELL = 4` and returns the first size whose `53 × (cell + gap) - gap` still fits the measured width; `gap` is `round(cell * 0.2)`, floored at 1px. A `ResizeObserver` on the wrapping `div.min-w-0.flex-1` re-derives it on every panel drag. Below 4px the grid stops being readable and the container scrolls instead — anchored to the right, because the newest weeks are the ones worth seeing.
+2. **Month ticks thin out by a stride, not by a collision rule.** `stride = ceil(12 × LABEL_MIN_GAP / gridWidth)`, and only months where `getMonth() % stride === 0` get a tick. Skipping labels one at a time produces an irregular pattern (1月 2月 3月 5月 6月 8月…) because months are 4 or 5 columns long; a stride gives 1月 3月 5月 7月 9月 11月.
+3. **A tick only belongs to a week that starts inside the shown year.** Otherwise the leading days of the previous December produce a `12月` at the far left which then collides with January — which is what the screenshot showed.
+4. **A 设置 button in the toolbar**, carrying the same `Ctrl` + `,` hint in its tooltip.
+
+**Why not just scroll.** Horizontal scrolling was the first instinct, but a year heatmap whose default view is the middle of July answers no question a user has; shrinking to fit keeps the whole year on screen, and the panel is resizable when more detail is wanted.
+
+**Evidence.** Before: `gridWidth 742`, `scrollerClient 759`, `scrollerScroll 759`, labels `12月@25, 1月@39` (14px apart). After: `gridWidth 264`, `scrollerClient 286`, `scrollerScroll 286` (no overflow), labels `1月@30, 3月@70, 5月@115, 7月@160, 9月@205, 11月@245`. A screenshot of the real library shows the whole year with the September and October cells filled in. `npm run gate:v2` exit 0 (9 files, 188 tests); the seven README screenshots were re-captured because the toolbar changed.
+
+**Cost.** Four-pixel cells are a glance, not a reading — the tooltip carries the numbers, and clicking a cell filters the timeline to that day. The metric is recomputed on every resize, so the grid is a `useMemo` keyed on `metrics.step` and each cell is still memoised.
+
+**Lesson.** A fixed pixel size for a component that lives in a user-resizable column is a latent bug with a long fuse: it looks correct on the machine it was written on and clips on someone else's window. Measure the container.
+
 
 

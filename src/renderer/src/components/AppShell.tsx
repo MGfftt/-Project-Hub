@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal, Settings } from 'lucide-react'
 import type { BackgroundStatus, TrayState } from '@shared/types'
 import { useTree } from '@renderer/stores/tree'
 import { useEvents } from '@renderer/stores/events'
@@ -348,6 +348,16 @@ export function AppShell(): JSX.Element {
               </span>
             ) : null}
             <span className="flex-1" />
+            <button
+              type="button"
+              data-open-settings
+              className="btn btn-ghost"
+              title={t('app.settingsTitle')}
+              onClick={() => useUi.getState().openDialog('settings')}
+            >
+              <Settings size={14} aria-hidden />
+              {t('app.settings')}
+            </button>
             <button
               type="button"
               className={detailOpen ? 'btn btn-primary' : 'btn btn-ghost'}

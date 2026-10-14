@@ -18,6 +18,8 @@ export const app: Dict = {
     '显示或隐藏右侧属性面板（状态、图标、标签）',
     'Show or hide the properties panel (status, icon, tags)'
   ],
+  'app.settings': ['设置', 'Settings'],
+  'app.settingsTitle': ['打开设置（Ctrl+,）', 'Open settings (Ctrl+,)'],
   'app.treeLabel': ['项目树', 'Project tree'],
   'app.treeResizeLabel': ['调整项目树宽度', 'Resize the project tree'],
   'app.mainViewLabel': ['主视图', 'Main view'],
