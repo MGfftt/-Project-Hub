@@ -10,6 +10,7 @@
  */
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { basename, join } from 'node:path'
+import { release } from 'node:os'
 import { promises as fsp, readFileSync } from 'node:fs'
 import { CH } from '../../shared/channels'
 import { BUILTIN_ICONS, ICON_NAMES, type IconDef } from '../../shared/icons'
@@ -47,6 +48,35 @@ import type { Thumbnailer } from '../services/thumbnailer'
 
 const log = createLogger('ipc')
 
+/* ------------------------------------------------------------------ */
+/* window material (§9.11)                                             */
+/* ------------------------------------------------------------------ */
+
+/** Acrylic arrived with Windows 11 22H2 (build 22621). */
+const MATERIAL_MIN_BUILD = 22621
+
+function materialSupported(): boolean {
+  if (process.platform !== 'win32') return false
+  const build = Number(release().split('.')[2] ?? 0)
+  return Number.isFinite(build) && build >= MATERIAL_MIN_BUILD
+}
+
+/**
+ * §9.11 — "real frosted glass" needs something behind the window to see, and
+ * only the compositor can supply it: with acrylic the desktop is drawn behind
+ * the page, so a transparent body really is see-through. Windows 10 has no
+ * acrylic and never will; there the renderer's colour wash is all there is, so
+ * this is a no-op rather than an error.
+ */
+function applyWindowMaterial(win: BrowserWindow, acrylic: boolean): void {
+  if (!materialSupported()) return
+  try {
+    win.setBackgroundMaterial(acrylic ? 'acrylic' : 'none')
+  } catch (err) {
+    log.warn('setBackgroundMaterial failed', { err: (err as Error).message })
+  }
+}
+
 export interface IpcContext {
   anchor: Anchor
   thumbnailer: Thumbnailer
@@ -63,6 +93,13 @@ export interface IpcContext {
   thumbsDir: string
   backgroundsDir: string
   getWindow: () => BrowserWindow | null
+  /**
+   * §9.11 — the frameless window's maximise state lives with the window itself;
+   * the router only forwards. Both are optional so the unit tests can register
+   * the surface without a window.
+   */
+  toggleMaximizeWindow?: () => void
+  windowMaximized?: () => boolean
   broadcast: (channel: string, payload: unknown) => void
   scanQueue: SerialQueue
 }
@@ -637,6 +674,40 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       return { filename: null, origin: null, bytes: null }
     }
   }
+
+  /* ----------------------------------------------------------- appearance */
+
+  // §9.11 — the renderer is the only place that knows both switches, so it says
+  // which one wins; the main process only knows how to ask the compositor.
+  handle(CH.appearance.setMaterial, (state: { glass?: boolean; picture?: boolean }) => {
+    const win = ctx.getWindow()
+    if (!win || win.isDestroyed()) return
+    applyWindowMaterial(win, Boolean(state?.glass) && !state?.picture)
+  })
+
+  /* --------------------------------------------------------------- window */
+
+  // §9.11 — `frame: false` removed the native buttons, so these four channels are
+  // the window's whole chrome. Each one tolerates a missing window: the unit
+  // tests register the router with no window at all.
+  handle(CH.window.minimize, () => {
+    const win = ctx.getWindow()
+    if (!win || win.isDestroyed()) return
+    win.minimize()
+  })
+
+  handle(CH.window.toggleMaximize, () => {
+    ctx.toggleMaximizeWindow?.()
+  })
+
+  handle(CH.window.close, () => {
+    const win = ctx.getWindow()
+    if (!win || win.isDestroyed()) return
+    // §10.2: `close()` runs the same hide-to-tray handler as the native button.
+    win.close()
+  })
+
+  handle(CH.window.state, () => ({ maximized: ctx.windowMaximized?.() ?? false }))
 
   /* ----------------------------------------------------------- background */
 

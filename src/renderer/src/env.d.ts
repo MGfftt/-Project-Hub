@@ -69,6 +69,7 @@ export type BroadcastChannel =
   | 'scan:progress'
   | 'task:status'
   | 'window:visibility'
+  | 'window:maximized'
   | 'tray:state'
 
 export interface HubApi {
@@ -128,6 +129,17 @@ export interface HubApi {
       choose(): Promise<{ ok: boolean; image?: BackgroundImage; error?: string }>
       clear(): Promise<void>
     }
+  }
+  appearance: {
+    /** §9.11 — Windows: draw the desktop through the window while glass is on. */
+    setMaterial(state: { glass: boolean; picture: boolean }): Promise<void>
+  }
+  window: {
+    /** §9.11 — a frameless window has no native buttons. */
+    minimize(): Promise<void>
+    toggleMaximize(): Promise<void>
+    close(): Promise<void>
+    state(): Promise<{ maximized: boolean }>
   }
   background: {
     pause(): Promise<void>

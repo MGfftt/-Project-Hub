@@ -11,7 +11,7 @@
  * picture is set the light/dark choice follows that picture's average colour
  * rather than the stored preference (`lib/wallpaper.ts` decides which).
  */
-import { activeTintDark } from './wallpaper'
+import { activeTintDark, syncWindowMaterial } from './wallpaper'
 
 export type ThemePref = 'light' | 'dark' | 'system'
 
@@ -93,6 +93,10 @@ export function applyGlass(enabled: boolean): void {
   } catch {
     /* private mode / disabled storage — the attribute above still applied */
   }
+  /* §9.11 — the switch also decides whether the window asks the compositor for
+     a see-through backdrop; on Windows 11 that is what "real frosted glass"
+     turns out to be. */
+  syncWindowMaterial({ glass: enabled })
 }
 
 /** Synchronous hint so the first frame is already frosted (or not). */

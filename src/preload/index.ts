@@ -161,6 +161,15 @@ const api: HubApi = {
       clear: () => invoke<void>(CH.settings.background.clear)
     }
   },
+  appearance: {
+    setMaterial: (state) => invoke<void>(CH.appearance.setMaterial, state)
+  },
+  window: {
+    minimize: () => invoke<void>(CH.window.minimize),
+    toggleMaximize: () => invoke<void>(CH.window.toggleMaximize),
+    close: () => invoke<void>(CH.window.close),
+    state: () => invoke<{ maximized: boolean }>(CH.window.state)
+  },
   background: {
     pause: () => invoke<void>(CH.background.pause),
     resume: () => invoke<void>(CH.background.resume),

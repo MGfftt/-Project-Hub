@@ -261,6 +261,21 @@ export interface Api {
     set(key: string, value: string): Promise<void>
     all(): Promise<Record<string, string>>
   }
+  appearance: {
+    /**
+     * §9.11 — Windows only: acrylic draws the desktop behind the window, which
+     * is what makes the frosted-glass switch mean something. `picture` wins over
+     * `glass`: a chosen picture is the window's own backdrop.
+     */
+    setMaterial(state: { glass: boolean; picture: boolean }): Promise<void>
+  }
+  window: {
+    /** §9.11 — a frameless window has no native buttons; the tab strip draws them. */
+    minimize(): Promise<void>
+    toggleMaximize(): Promise<void>
+    close(): Promise<void>
+    state(): Promise<{ maximized: boolean }>
+  }
   background: {
     pause(): Promise<void>
     resume(): Promise<void>

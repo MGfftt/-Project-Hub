@@ -16,6 +16,35 @@
 const WALLPAPER_HINT_KEY = 'hub.wallpaper'
 const TINT_HINT_KEY = 'hub.wallpaper.tint'
 
+/**
+ * §9.11 — the window-level half of the effect.
+ *
+ * Acrylic is not something CSS can ask for: the compositor has to draw the
+ * desktop behind the page, and only the main process can ask it. The two
+ * switches live in different callers, so the last known state is remembered
+ * here and each caller sends only the half it owns.
+ */
+let materialGlass = false
+let materialPicture = false
+
+function pushWindowMaterial(): void {
+  try {
+    void window.hub?.appearance
+      ?.setMaterial({ glass: materialGlass, picture: materialPicture })
+      .catch(() => {
+        /* an older main process without the channel — the wash still stands in */
+      })
+  } catch {
+    /* no hub at all (unit tests import this module) — nothing to tell */
+  }
+}
+
+export function syncWindowMaterial(patch: { glass?: boolean; picture?: boolean }): void {
+  if (patch.glass !== undefined) materialGlass = patch.glass
+  if (patch.picture !== undefined) materialPicture = patch.picture
+  pushWindowMaterial()
+}
+
 /** Only our own media scheme may reach a CSS `url()`. */
 function isSafeWallpaperUrl(url: unknown): url is string {
   return typeof url === 'string' && url.startsWith('hub-media://') && url.length < 4096
@@ -86,6 +115,7 @@ export function applyWallpaper(url: string | null | undefined, tint: string | nu
     } else {
       clearTint(root)
     }
+    syncWindowMaterial({ picture: true })
     return
   }
   root.style.removeProperty('--wallpaper')
@@ -96,6 +126,7 @@ export function applyWallpaper(url: string | null | undefined, tint: string | nu
   } catch {
     /* ignore */
   }
+  syncWindowMaterial({ picture: false })
 }
 
 /** Synchronous hint so the first frame is already painted. */

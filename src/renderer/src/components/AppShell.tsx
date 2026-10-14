@@ -12,6 +12,7 @@ import {
   rootIdOf
 } from '@renderer/lib/tree'
 import TreePanel from '@renderer/components/TreePanel'
+import WindowControls from '@renderer/components/WindowControls'
 import Timeline from '@renderer/components/Timeline'
 import ProjectMap from '@renderer/components/ProjectMap'
 import NodeOverview from '@renderer/components/NodeOverview'
@@ -311,14 +312,14 @@ export function AppShell(): JSX.Element {
           <div
             role="tablist"
             aria-label={t('app.mainViewTabsLabel')}
-            className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
+            className="app-drag flex shrink-0 items-center gap-1 border-b px-2 py-1.5"
             style={{ borderColor: 'var(--border)' }}
           >
             <button
               type="button"
               role="tab"
               aria-selected={mainView === 'map'}
-              className={mainView === 'map' ? 'btn btn-primary' : 'btn btn-ghost'}
+              className={`app-no-drag ${mainView === 'map' ? 'btn btn-primary' : 'btn btn-ghost'}`}
               title={t('app.tab.mapTitle')}
               onClick={() => setMainView('map')}
             >
@@ -328,7 +329,7 @@ export function AppShell(): JSX.Element {
               type="button"
               role="tab"
               aria-selected={mainView === 'overview'}
-              className={mainView === 'overview' ? 'btn btn-primary' : 'btn btn-ghost'}
+              className={`app-no-drag ${mainView === 'overview' ? 'btn btn-primary' : 'btn btn-ghost'}`}
               onClick={() => setMainView('overview')}
             >
               {t('app.tab.overview')}
@@ -337,7 +338,7 @@ export function AppShell(): JSX.Element {
               type="button"
               role="tab"
               aria-selected={mainView === 'timeline'}
-              className={mainView === 'timeline' ? 'btn btn-primary' : 'btn btn-ghost'}
+              className={`app-no-drag ${mainView === 'timeline' ? 'btn btn-primary' : 'btn btn-ghost'}`}
               onClick={() => setMainView('timeline')}
             >
               {t('app.tab.timeline')}
@@ -351,7 +352,7 @@ export function AppShell(): JSX.Element {
             <button
               type="button"
               data-open-settings
-              className="btn btn-ghost"
+              className="btn btn-ghost app-no-drag"
               title={t('app.settingsTitle')}
               onClick={() => useUi.getState().openDialog('settings')}
             >
@@ -360,7 +361,7 @@ export function AppShell(): JSX.Element {
             </button>
             <button
               type="button"
-              className={detailOpen ? 'btn btn-primary' : 'btn btn-ghost'}
+              className={`app-no-drag ${detailOpen ? 'btn btn-primary' : 'btn btn-ghost'}`}
               aria-pressed={detailOpen}
               title={t('app.propertiesTitle')}
               onClick={() => setDetailOpen(!detailOpen)}
@@ -368,6 +369,7 @@ export function AppShell(): JSX.Element {
               <SlidersHorizontal size={14} aria-hidden />
               {t('app.properties')}
             </button>
+            <WindowControls />
           </div>
 
           {mainView === 'timeline' ? (

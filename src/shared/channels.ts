@@ -64,6 +64,17 @@ export const CH = {
       clear: 'settings:background:clear'
     }
   },
+  appearance: {
+    /** §9.11 — let the compositor draw the desktop behind the window. */
+    setMaterial: 'appearance:setMaterial'
+  },
+  window: {
+    /** §9.11 — the window is frameless, so the renderer draws its own controls. */
+    minimize: 'window:minimize',
+    toggleMaximize: 'window:toggleMaximize',
+    close: 'window:close',
+    state: 'window:state'
+  },
   background: {
     pause: 'background:pause',
     resume: 'background:resume',
@@ -88,6 +99,7 @@ export const CH = {
     scanProgress: 'scan:progress',
     taskStatus: 'task:status',
     windowVisibility: 'window:visibility',
+    windowMaximized: 'window:maximized',
     trayState: 'tray:state'
   }
 } as const

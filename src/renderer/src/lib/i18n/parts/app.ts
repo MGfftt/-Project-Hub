@@ -27,6 +27,12 @@ export const app: Dict = {
   'app.detailLabel': ['节点详情', 'Node details'],
   'app.detailResizeLabel': ['调整详情面板宽度', 'Resize the details panel'],
 
+  /* --- §9.11 the window's own buttons (the frame is hidden) --------------- */
+  'win.minimize': ['最小化', 'Minimise'],
+  'win.maximize': ['最大化', 'Maximise'],
+  'win.restore': ['向下还原', 'Restore'],
+  'win.close': ['关闭', 'Close'],
+
   /* --- §8.5 shortcuts and their status lines ----------------------------- */
   'app.rescanStarted': ['已开始重新扫描', 'Rescan started'],
   'app.rescanFailed': ['重新扫描失败', 'Rescan failed'],

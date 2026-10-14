@@ -11,7 +11,7 @@
  * indexed project folder. Every path the app owns lives under `app.getPath('userData')`.
  */
 
-import { app, BrowserWindow, Menu, Tray, nativeTheme, powerMonitor, protocol, net } from 'electron'
+import { app, BrowserWindow, Menu, Tray, nativeTheme, powerMonitor, protocol, net, screen } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, appendFile } from 'node:fs/promises'
 import { join, normalize, sep } from 'node:path'
@@ -70,6 +70,15 @@ let scheduler: Scheduler | null = null
 let watcher: Awaited<ReturnType<typeof registerAllTasks>> = null
 let ipcCtx: IpcContext | null = null
 let isQuitting = false
+
+/**
+ * §9.11 window chrome. The frame is hidden, so these two are the whole title
+ * bar: `windowMaximized` drives the icon, and `windowRestoreBounds` remembers
+ * where the window was before it filled the work area. They are read by the
+ * `window:*` channels through `IpcContext`.
+ */
+let windowMaximized = false
+let windowRestoreBounds: Electron.Rectangle | null = null
 
 /** Unread-event counter surfaced in the tray tooltip; reset when the window shows. */
 let unreadEvents = 0
@@ -182,7 +191,14 @@ function createWindow(): BrowserWindow {
     // Without this the taskbar and Alt-Tab carry Electron's own icon in
     // development, where `process.execPath` is electron.exe.
     ...(icon.isEmpty() ? {} : { icon }),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#14161a' : '#f6f7f9',
+    // §9.11 — the frosted-glass switch only means something if the window itself
+    // can be seen through, and on Windows a transparent window has to be
+    // frameless: the native frame forces an opaque client area. The tab strip
+    // therefore draws its own minimise/maximise/close buttons, and the whole
+    // surface stays opaque until `data-glass` turns the sheets translucent.
+    transparent: true,
+    frame: false,
+    backgroundColor: '#00000000',
     title: 'Project Hub',
     webPreferences: {
       preload: preloadPath,
@@ -219,6 +235,22 @@ function createWindow(): BrowserWindow {
 
   win.on('focus', () => noteActivity())
 
+  // §9.11 — a layered window is maximised by the compositor without regard for
+  // the work area, so a maximised app would cover the taskbar; the bounds are
+  // pulled back to `workArea`. Double-clicking the drag strip takes this path.
+  win.on('maximize', () => {
+    windowMaximized = true
+    const area = screen.getDisplayMatching(win.getBounds()).workArea
+    win.setBounds(area)
+    send(CH.broadcast.windowMaximized, { maximized: true })
+  })
+
+  win.on('unmaximize', () => {
+    windowMaximized = false
+    windowRestoreBounds = null
+    send(CH.broadcast.windowMaximized, { maximized: false })
+  })
+
   // §10.2: closing hides to tray instead of quitting, unless the user turned that
   // off in settings or is quitting from the tray menu.
   win.on('close', (event) => {
@@ -235,6 +267,39 @@ function createWindow(): BrowserWindow {
   })
 
   return win
+}
+
+/**
+ * §9.11 — the tab strip's middle button.
+ *
+ * The renderer cannot call `win.maximize()` and trust it: on a layered window
+ * the compositor ignores the work area and `isMaximized()` does not reliably
+ * report the result, so the state is tracked here and the restored bounds are
+ * remembered explicitly.
+ */
+function toggleMaximizeWindow(): void {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return
+
+  if (windowMaximized) {
+    const bounds = windowRestoreBounds
+    windowMaximized = false
+    windowRestoreBounds = null
+    if (win.isMaximized()) win.unmaximize()
+    if (bounds) win.setBounds(bounds)
+    send(CH.broadcast.windowMaximized, { maximized: false })
+    return
+  }
+
+  windowRestoreBounds = win.getBounds()
+  windowMaximized = true
+  const area = screen.getDisplayMatching(windowRestoreBounds).workArea
+  win.setBounds(area)
+  send(CH.broadcast.windowMaximized, { maximized: true })
+}
+
+function isWindowMaximized(): boolean {
+  return windowMaximized
 }
 
 function showWindow(): void {
@@ -517,6 +582,8 @@ async function boot(): Promise<void> {
     thumbsDir,
     backgroundsDir,
     getWindow: () => mainWindow,
+    toggleMaximizeWindow,
+    windowMaximized: isWindowMaximized,
     broadcast,
     scanQueue
   }
