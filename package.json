@@ -24,7 +24,7 @@
     "build:linux": "npm run build && electron-builder --linux --config electron-builder.yml",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest run tests/unit",
+    "test:unit": "vitest run tests/unit tests/renderer",
     "bench:scan": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/bench-scan.mts",
     "gen:fixture": "node --experimental-transform-types --import ./scripts/alias-loader.mjs scripts/gen-big-fixture.mts",
     "sync:schema": "node scripts/sync-schema.mjs",

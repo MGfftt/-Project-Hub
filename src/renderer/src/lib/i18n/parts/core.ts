@@ -21,6 +21,14 @@ export const core: Dict = {
   'time.days': ['{n} 天', '{n} d'],
   'note.chars': ['{n} 字', '{n} chars'],
 
+  /* --- filesystem change summaries --------------------------------------- */
+  /* The scanner stores these in events.message as `新建 3 · 修改 1`, so they are
+     re-rendered at display time rather than written in one language. */
+  'event.created': ['新建 {n}', '{n} created'],
+  'event.modified': ['修改 {n}', '{n} modified'],
+  'event.deleted': ['删除 {n}', '{n} deleted'],
+  'event.changed': ['文件变化', 'Files changed'],
+
   /* --- node kinds -------------------------------------------------------- */
   'kind.group': ['分组', 'Group'],
   'kind.project': ['项目', 'Project'],

@@ -13,7 +13,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { HubEvent, TreeNode } from '@shared/types'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
-import { formatRelative } from '@renderer/lib/format'
+import { formatEventMessage, formatRelative } from '@renderer/lib/format'
 import { t, tCount } from '@renderer/lib/i18n'
 import { EmptyState } from '@renderer/components/EmptyState'
 import { Skeleton } from '@renderer/components/Skeleton'
@@ -186,7 +186,7 @@ function stamp(ts: number): string {
 }
 
 function dotTitle(ev: HubEvent, zoom: Zoom): string {
-  const head = ev.message && ev.message.trim() ? ev.message.trim() : t('map.noCommitMessage')
+  const head = formatEventMessage(ev.message, ev.source) || t('map.noCommitMessage')
   return [
     head,
     `${bucketLabel(bucketStart(ev.occurred_at, zoom), zoom)} · ${stamp(ev.occurred_at)}`,
@@ -399,7 +399,7 @@ function EventList({ events, total, labelOf, selectedId, onSelect }: EventListPr
       {events.map((ev) => {
         const isActive = selectedId === ev.id
         const filesOpen = openFilesFor === ev.id
-        const head = ev.message && ev.message.trim() ? ev.message.trim() : t('map.noCommitMessage')
+        const head = formatEventMessage(ev.message, ev.source) || t('map.noCommitMessage')
         return (
           <li key={ev.id} className={isActive ? 'bg-[var(--accent)]/10' : undefined}>
             <button

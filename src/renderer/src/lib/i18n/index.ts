@@ -58,7 +58,10 @@ export function setLang(lang: Lang): void {
   if (!isLang(lang)) return
   const changed = lang !== current
   current = lang
-  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+  /* Guarded so the module stays importable (and testable) outside a DOM. */
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+  }
   try {
     window.localStorage.setItem(LANG_HINT_KEY, lang)
   } catch {

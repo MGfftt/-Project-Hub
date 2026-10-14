@@ -6,6 +6,7 @@ import {
   formatCount,
   formatDateTime,
   formatDelta,
+  formatEventMessage,
   formatNoteLength,
   formatRelativeTime
 } from '@renderer/lib/format'
@@ -686,7 +687,7 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                     <button
                       type="button"
                       className="focus-ring flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--hover)]"
-                      title={event.message || t('detail.noCommitMessage')}
+                      title={formatEventMessage(event.message, event.source) || t('detail.noCommitMessage')}
                       onClick={openInTimeline}
                     >
                       <span
@@ -696,7 +697,8 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs text-[var(--text)]">
-                          {event.message || t('detail.noCommitMessage')}
+                          {formatEventMessage(event.message, event.source) ||
+                            t('detail.noCommitMessage')}
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-dim)]">
                           <span>{formatRelativeTime(event.occurred_at)}</span>

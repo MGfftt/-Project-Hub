@@ -95,6 +95,33 @@ export function formatNoteLength(markdown: string | null | undefined): string {
   return t('note.chars', { n: formatCount(markdown?.length ?? 0) })
 }
 
+const FS_PART = /^(新建|修改|删除) (\d+)$/
+const FS_KEY: Record<string, string> = {
+  新建: 'event.created',
+  修改: 'event.modified',
+  删除: 'event.deleted'
+}
+
+/**
+ * A filesystem event's `message` is machine-built (「新建 3 · 修改 1」) and stored
+ * that way in the database, so it is re-rendered here rather than being written
+ * in whichever language happened to be active when the scan ran. A git event's
+ * message is the commit subject and is returned untouched.
+ */
+export function formatEventMessage(message: string | null | undefined, source: string): string {
+  const raw = (message ?? '').trim()
+  if (!raw) return ''
+  if (source !== 'fs') return raw
+  const parts = raw.split(' · ')
+  const out: string[] = []
+  for (const part of parts) {
+    const m = FS_PART.exec(part)
+    if (!m) return raw
+    out.push(t(FS_KEY[m[1]], { n: Number(m[2]) }))
+  }
+  return out.join(' · ')
+}
+
 export function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
