@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { SETTING_KEYS } from '@shared/types'
 import type { AppInfo, BackgroundImage } from '@renderer/env'
-import type { ThemePref } from '@renderer/lib/theme'
+import { applyResolvedTheme, type ThemePref } from '@renderer/lib/theme'
 import { formatBytes, formatDateTime, formatDuration, formatRelativeTime } from '@renderer/lib/format'
 import { getLang, LANGUAGES, setLang, t, type Lang } from '@renderer/lib/i18n'
 import { applyWallpaper } from '@renderer/lib/wallpaper'
@@ -23,10 +23,7 @@ export interface SettingsDialogProps {
 const THEME_OPTIONS: ReadonlyArray<{ value: ThemePref; key: string }> = [
   { value: 'light', key: 'settings.themeLight' },
   { value: 'dark', key: 'settings.themeDark' },
-  { value: 'system', key: 'settings.themeSystem' },
-  /* §9.11 — frosted glass follows the system for light/dark and only makes the
-     surfaces translucent, so it reads as a fourth choice in this row. */
-  { value: 'glass', key: 'settings.themeGlass' }
+  { value: 'system', key: 'settings.themeSystem' }
 ]
 
 const TASK_LABELS: Record<string, string> = {
@@ -40,6 +37,8 @@ const TASK_LABELS: Record<string, string> = {
 export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
   const theme = useUi((s) => s.theme)
   const setTheme = useUi((s) => s.setTheme)
+  const glass = useUi((s) => s.glass)
+  const setGlass = useUi((s) => s.setGlass)
   const compactMode = useUi((s) => s.compactMode)
   const setCompactMode = useUi((s) => s.setCompactMode)
   const clickToOpen = useUi((s) => s.clickToOpen)
@@ -110,6 +109,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
    * §9.11 — the picture is painted the moment it is chosen. Before this the
    * dialog only recorded a file name, so picking one looked like nothing
    * happened until (never) the next launch.
+   *
+   * The theme is re-resolved straight after, because the picture's average
+   * colour is what decides light versus dark while one is set.
    */
   const onChooseBackground = useCallback((): void => {
     const hub = window.hub
@@ -120,7 +122,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .then((res) => {
         if (res.ok && res.image) {
           setImage(res.image)
-          applyWallpaper((res.image as { url?: string }).url ?? null)
+          applyWallpaper(res.image.url ?? null, res.image.tint ?? null)
+          applyResolvedTheme(useUi.getState().theme)
           setStatus(t('settings.backgroundSet'), 'info')
         } else if (res.error) {
           setStatus(res.error, 'error')
@@ -138,6 +141,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
       .then(() => {
         setImage({ filename: null, origin: null, bytes: null })
         applyWallpaper(null)
+        applyResolvedTheme(useUi.getState().theme)
         setStatus(t('settings.backgroundCleared'), 'info')
       })
       .catch(() => setStatus(t('settings.backgroundClearFailed'), 'error'))
@@ -209,6 +213,17 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): JSX.Element {
               </button>
             ))}
           </div>
+        </Field>
+        {/* §9.11 — while a picture is set it, not the preference above, is what
+            decides light versus dark; say so rather than leave the radio group
+            looking like it is being ignored. */}
+        {image?.url ? (
+          <p className="px-2 pb-1 text-[11px] leading-5 text-[var(--text-dim)]" data-theme-auto-hint>
+            {t('settings.themeAutoHint')}
+          </p>
+        ) : null}
+        <Field label={t('settings.glass')}>
+          <Toggle checked={glass} onChange={setGlass} label={t('settings.glassHint')} />
         </Field>
         <Field label={t('settings.compactMode')}>
           <Toggle

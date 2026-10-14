@@ -320,6 +320,8 @@ export const SETTING_KEYS = {
   clickToOpen: 'clickToOpen',
   compactMode: 'compactMode',
   theme: 'theme',
+  /** Frosted glass is an independent effect layered over any theme (§9.11). */
+  glass: 'glass',
   /** Interface language: 'zh' or 'en' (§9.10). */
   language: 'language',
   firstHideTip: 'firstHideTip',
@@ -333,6 +335,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   [SETTING_KEYS.clickToOpen]: 'true',
   [SETTING_KEYS.compactMode]: 'false',
   [SETTING_KEYS.theme]: 'system',
+  [SETTING_KEYS.glass]: 'false',
   [SETTING_KEYS.language]: 'zh',
   [SETTING_KEYS.firstHideTip]: '',
   [SETTING_KEYS.autoLaunch]: 'false',

@@ -31,7 +31,15 @@ export const settings: Dict = {
   'settings.themeLight': ['浅色', 'Light'],
   'settings.themeDark': ['深色', 'Dark'],
   'settings.themeSystem': ['跟随系统', 'Follow system'],
-  'settings.themeGlass': ['毛玻璃', 'Frosted glass'],
+  'settings.themeAutoHint': [
+    '已选择背景图片：界面的深浅色现在跟随图片的平均色，主题选项暂停生效。',
+    'A background picture is set: light and dark now follow the picture’s average colour, so the theme choice above is on hold.'
+  ],
+  'settings.glass': ['毛玻璃', 'Frosted glass'],
+  'settings.glassHint': [
+    '在没有背景图片时叠加真实的毛玻璃效果，可以透过界面看到后面的内容',
+    'Adds a real frosted-glass effect when no background picture is set, so the window shows what is behind it'
+  ],
   'settings.language': ['语言', 'Language'],
   'settings.languageHint': ['界面语言', 'Interface language'],
   'settings.compactMode': ['紧凑模式', 'Compact mode'],
@@ -41,8 +49,8 @@ export const settings: Dict = {
   'settings.clear': ['清除', 'Clear'],
   'settings.notSet': ['未设置', 'Not set'],
   'settings.backgroundHint': [
-    '选好之后立刻生效：三个栏位会变成半透明，图片透在后面；想要更明显的玻璃感，把主题选成「毛玻璃」。',
-    'Takes effect immediately: the three columns turn translucent so the picture shows through. Pick the “Frosted glass” theme for a stronger effect.'
+    '选好之后立刻生效：图片会铺满整个窗口，各个界面变成半透明的色块，颜色取自这张图片的平均色，界面的深浅色也跟随它自动切换。',
+    'Takes effect immediately: the picture fills the window, every panel becomes a translucent sheet tinted with the picture’s average colour, and light and dark follow that colour automatically.'
   ],
   'settings.backgroundSet': ['已设置背景图片', 'Background image set'],
   'settings.backgroundCleared': ['已清除背景图片', 'Background image cleared'],

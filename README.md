@@ -26,7 +26,7 @@ Project Hub 把**归属关系**和**元数据**从文件系统里独立出来：
 
 | 编号 | 需求 | 实现方式 | 验证 |
 | --- | --- | --- | --- |
-| **R1** | 图形化展示，清晰可读 | Tailwind + CSS 变量主题，正文对比度 ≥ 4.5:1，次要信息 ≥ 3:1 且 ≥ 12px；行高 32px（紧凑 26px）；深浅色 / 毛玻璃主题，可换背景图片 | `src/renderer/src/styles.css`、`src/renderer/src/components/*` |
+| **R1** | 图形化展示，清晰可读 | Tailwind + CSS 变量主题，正文对比度 ≥ 4.5:1，次要信息 ≥ 3:1 且 ≥ 12px；行高 32px（紧凑 26px）；深浅色 / 跟随系统主题 + 独立的毛玻璃开关；可换背景图片，图片的平均色成为整套界面配色 | `src/renderer/src/styles.css`、`src/renderer/src/components/*` |
 | **R2** | 单击树节点打开文件夹 | 单击 = 选中 + `shell.openFolder`；虚拟分组与路径缺失的节点只选中不打开；`clickToOpen` 设置可关闭单击打开 | `src/renderer/src/components/NodeTree.tsx`、`src/main/ipc/main.ts` |
 | **R3** | 右键节点 → 查看改动 / 属性 / 标注 | 冻结顺序的右键菜单；查看改动跳到时间线并锁定该节点子树；属性弹窗分「基本/磁盘/Git/改动/标注」 | `src/renderer/src/components/ContextMenu.tsx`、`dialogs/StatsDialog.tsx` |
 | **R4** | 文件夹程序内改名 + 改图标 | 只写 `nodes.display_name` / `icon_type` / `icon_value`，**从不重命名磁盘目录**；别名上限 64 字符；图标支持自动/内置/Emoji/导入图片四条来源 | `src/main/ipc/main.ts`、`src/renderer/src/components/dialogs/IconPicker.tsx` |
@@ -240,7 +240,7 @@ project-hub/
 
 *设置——「语言」就在「外观」一组里，和主题、背景图片放在一起。*
 
-**主题与背景图片**：「设置 → 外观」里有四个主题：浅色、深色、跟随系统、**毛玻璃**。毛玻璃和「跟随系统」一样跟随系统的深浅色，另外把三个栏位、状态栏和对话框变成半透明，用 `backdrop-filter` 虚化背后的内容。**背景图片**选一张图片（也可以「清除」）之后**立刻生效**：图片铺满窗口、滚动时固定在原位，三个栏位变成半透明，图片从后面透出来——以前的版本只会把图片复制进数据目录并在设置里显示个文件名，界面上什么也不会变。没有选图片时，毛玻璃会用强调色在底下铺一层渐变，免得虚化的是一片纯色。图片只允许 `hub-media://` 协议，也就是程序自己复制到 `%APPDATA%\project-hub\backgrounds\` 的那一份，不会去引用你磁盘上的原始路径。
+**主题与背景图片**：「设置 → 外观」里有三个主题——浅色、深色、跟随系统；**毛玻璃**是独立于主题的一个开关，打开之后三个栏位、状态栏和对话框变成半透明，用 `backdrop-filter` 虚化背后的内容。没有背景图片时，底下会先铺一层强调色渐变，所以真的是「透过玻璃看到后面的东西」，而不是一片灰白。**背景图片**选一张图片（也可以「清除」）之后**立刻生效**：图片铺满整个窗口、滚动时固定在原位；整套界面的配色随即改成**这张图片的平均色**——三个栏位是平均色的半透明色块，图片从后面透出来（图片上不再叠加毛玻璃涂层，图片保持清晰），界面的深浅色也由平均色自动决定，上面的主题选项暂时让位。以前的版本只会把图片复制进数据目录并在设置里显示个文件名，界面上什么也不会变。图片只允许 `hub-media://` 协议，也就是程序自己复制到 `%APPDATA%\project-hub\backgrounds\` 的那一份，不会去引用你磁盘上的原始路径；平均色由主进程用 `nativeImage` 把图片缩到 8×8 再取均值算出。
 
 全部数据与设置都在 `%APPDATA%\project-hub\`。
 
@@ -260,7 +260,7 @@ These are non-negotiable acceptance conditions (R1–R6 in the project book). Fa
 
 | ID | Requirement | How it is met | Where |
 | --- | --- | --- | --- |
-| **R1** | Graphical display, clearly legible | Tailwind + CSS-variable theming, body contrast ≥ 4.5:1, secondary info ≥ 3:1 and ≥ 12px, 32px rows (26px compact), light, dark and frosted-glass themes, plus a replaceable background picture | `src/renderer/src/styles.css`, `src/renderer/src/components/*` |
+| **R1** | Graphical display, clearly legible | Tailwind + CSS-variable theming, body contrast ≥ 4.5:1, secondary info ≥ 3:1 and ≥ 12px, 32px rows (26px compact), light, dark and follow-system themes with an independent frosted-glass switch, plus a replaceable background picture whose average colour becomes the whole interface's palette | `src/renderer/src/styles.css`, `src/renderer/src/components/*` |
 | **R2** | Single click on a tree node opens its folder | Click = select + `shell.openFolder`; virtual groups and missing paths select only; the `clickToOpen` setting can turn open-on-click off | `src/renderer/src/components/NodeTree.tsx`, `src/main/ipc/main.ts` |
 | **R3** | Right-click a node → view changes / properties / annotation | A context menu with a frozen item order; "view changes" switches to the timeline and locks the filter to that node's subtree; properties opens a dialog grouped **Basics / Disk / Git / Changes / Annotations** | `src/renderer/src/components/ContextMenu.tsx`, `dialogs/StatsDialog.tsx` |
 | **R4** | In-app rename + icon change for folders | Only `nodes.display_name` / `icon_type` / `icon_value` are written — the disk directory is **never** renamed. Aliases cap at 64 characters; icons come from auto, built-in, emoji or an imported image | `src/main/ipc/main.ts`, `src/renderer/src/components/dialogs/IconPicker.tsx` |
@@ -460,7 +460,7 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 
 *Settings — Language sits in the Appearance group, next to the theme and the background image.*
 
-**Theme and background picture.** *Settings → Appearance* offers four themes: light, dark, follow the system, and **frosted glass**. Frosted glass follows the system's light/dark choice exactly like *follow the system*, and additionally turns the three columns, the status bar and the dialogs translucent, blurring whatever sits behind them with `backdrop-filter`. **Background image** takes effect **the moment you pick a picture** (and *Clear* removes it): the picture fills the window and stays put while the content scrolls, the columns turn translucent, and the picture shows through — in earlier versions the file was only copied into the data directory and named in the dialog, while nothing on screen changed. With frosted glass and no picture chosen, a gradient wash mixed from the accent colour is painted underneath, so that there is something to blur. Only a `hub-media://` URL is accepted — the copy the app itself made under `%APPDATA%\project-hub\backgrounds\` — never the original path on your disk.
+**Theme and background picture.** *Settings → Appearance* offers three themes — light, dark and follow the system; **frosted glass** is a switch independent of the theme, which turns the three columns, the status bar and the dialogs translucent and blurs whatever sits behind them with `backdrop-filter`. With no picture chosen, a gradient wash mixed from the accent colour is painted underneath, so the glass really does show something behind it instead of a flat grey. **Background image** takes effect **the moment you pick a picture** (and *Clear* removes it): the picture fills the window and stays put while the content scrolls, and the whole interface is then coloured by **the picture's average colour** — the columns become translucent sheets of that colour with the picture showing through (no frosted-glass coating is laid over the picture, so it stays crisp), and light and dark are chosen automatically from that colour, which puts the theme buttons on hold. In earlier versions the file was only copied into the data directory and named in the dialog, while nothing on screen changed. Only a `hub-media://` URL is accepted — the copy the app itself made under `%APPDATA%\project-hub\backgrounds\` — never the original path on your disk; the average colour is measured in the main process with `nativeImage`, resized to 8×8 and averaged.
 
 All data and settings live in `%APPDATA%\project-hub\`.
 

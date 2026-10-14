@@ -1,28 +1,71 @@
 /**
- * The chosen background image (§9.5).
+ * The chosen background image and its tint (§9.11).
  *
- * Until now the settings dialog copied a picture into `userData/backgrounds`,
- * recorded it in `background.json` and showed its file name — and nothing ever
- * painted it. This module is the missing half: it puts the picture on the
- * window and turns the surfaces translucent so it is actually visible.
+ * The settings dialog copies a picture into `userData/backgrounds` and records
+ * it in `background.json`; this module is what actually paints it. The picture
+ * is the base layer of the whole window, every sub-interface sits on top of it
+ * as a translucent sheet, and the sheet's colour is the picture's own average
+ * colour — measured in the main process (`tintOf`) and handed over with the URL.
  *
  * The URL is a `hub-media://` URL built by the main process, which is stable
- * across launches (it carries the absolute path, not a port), so it is mirrored
- * into `localStorage` as a first-paint hint exactly like the theme is.
+ * across launches (it carries the absolute path, not a port), so both the URL
+ * and the tint are mirrored into `localStorage` as first-paint hints exactly
+ * like the theme is.
  */
 
 const WALLPAPER_HINT_KEY = 'hub.wallpaper'
+const TINT_HINT_KEY = 'hub.wallpaper.tint'
 
 /** Only our own media scheme may reach a CSS `url()`. */
 function isSafeWallpaperUrl(url: unknown): url is string {
   return typeof url === 'string' && url.startsWith('hub-media://') && url.length < 4096
 }
 
+/** Only a plain `#rrggbb` may reach a CSS custom property. */
+function isSafeTint(tint: unknown): tint is string {
+  return typeof tint === 'string' && /^#[0-9a-fA-F]{6}$/.test(tint)
+}
+
 /**
- * Paints (or removes) the wallpaper. Idempotent, and safe to call with a `null`
- * URL before the async settings read resolves.
+ * Perceived brightness of `#rrggbb`, 0 (black) to 1 (white).
+ *
+ * Deliberately the plain channel mean and not relative luminance: this decides
+ * whether the interface should be light or dark, which is a judgement about how
+ * bright the picture *looks*, and gamma-corrected luminance calls every average
+ * photograph dark.
  */
-export function applyWallpaper(url: string | null | undefined): void {
+export function tintBrightness(tint: string): number {
+  const value = Number.parseInt(tint.slice(1), 16)
+  const r = (value >> 16) & 0xff
+  const g = (value >> 8) & 0xff
+  const b = value & 0xff
+  return (r + g + b) / 765
+}
+
+/**
+ * True when the picture is dark enough that the interface should be dark; null
+ * when there is no picture, which means "let the theme preference decide".
+ */
+export function tintIsDark(tint: string | null | undefined): boolean | null {
+  if (!isSafeTint(tint)) return null
+  return tintBrightness(tint) < 0.5
+}
+
+function clearTint(root: HTMLElement): void {
+  root.style.removeProperty('--tint')
+  delete root.dataset.tint
+  try {
+    window.localStorage.removeItem(TINT_HINT_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Paints (or removes) the picture and its tint. Idempotent, and safe to call
+ * with nulls before the async settings read resolves.
+ */
+export function applyWallpaper(url: string | null | undefined, tint: string | null | undefined = null): void {
   const root = document.documentElement
   if (isSafeWallpaperUrl(url)) {
     root.style.setProperty('--wallpaper', `url("${url.replace(/["\\]/g, '')}")`)
@@ -32,10 +75,22 @@ export function applyWallpaper(url: string | null | undefined): void {
     } catch {
       /* private mode — the attribute above still applied */
     }
+    if (isSafeTint(tint)) {
+      root.style.setProperty('--tint', tint)
+      root.dataset.tint = '1'
+      try {
+        window.localStorage.setItem(TINT_HINT_KEY, tint)
+      } catch {
+        /* ignore */
+      }
+    } else {
+      clearTint(root)
+    }
     return
   }
   root.style.removeProperty('--wallpaper')
   delete root.dataset.wallpaper
+  clearTint(root)
   try {
     window.localStorage.removeItem(WALLPAPER_HINT_KEY)
   } catch {
@@ -53,14 +108,41 @@ export function readStoredWallpaper(): string | null {
   }
 }
 
-/** Reads the picture recorded in `background.json` and paints it. */
-export async function syncWallpaperFromSettings(): Promise<void> {
-  const hub = window.hub
-  if (!hub) return
+/** Synchronous hint for the tint, so the first frame is already tinted. */
+export function readStoredTint(): string | null {
   try {
-    const image = (await hub.settings.background.current()) as { url?: string } | null
-    applyWallpaper(image?.url ?? null)
+    const raw = window.localStorage.getItem(TINT_HINT_KEY)
+    return isSafeTint(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What the picture currently on screen says about light versus dark: `true`
+ * for a dark picture, `false` for a bright one, `null` when there is none.
+ *
+ * The hint is the same value `applyWallpaper` just recorded, so this is always
+ * in step with what is painted — including on the very first frame.
+ */
+export function activeTintDark(): boolean | null {
+  return tintIsDark(readStoredTint())
+}
+
+/**
+ * Reads the picture recorded in `background.json`, paints it with its tint and
+ * returns that tint (null when no picture is set).
+ */
+export async function syncWallpaperFromSettings(): Promise<string | null> {
+  const hub = window.hub
+  if (!hub) return null
+  try {
+    const image = (await hub.settings.background.current()) as { url?: string; tint?: string | null } | null
+    const tint = image?.tint ?? readStoredTint()
+    applyWallpaper(image?.url ?? null, tint)
+    return isSafeTint(tint) ? tint : null
   } catch {
     /* keep whatever the hint painted */
+    return readStoredTint()
   }
 }

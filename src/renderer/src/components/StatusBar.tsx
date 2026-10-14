@@ -112,7 +112,7 @@ export function StatusBar(): JSX.Element {
   return (
     <footer
       className="glass-panel flex min-h-[26px] flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-0.5 text-[12px] leading-5"
-      style={{ borderColor: 'var(--border)', backgroundColor: 'var(--panel)', color: 'var(--text-dim)' }}
+      style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-dim)' }}
       aria-label={t('map.statusBar')}
     >
       {/* left: scan progress or the library summary */}

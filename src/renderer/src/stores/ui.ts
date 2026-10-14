@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import type { BackgroundStatus, TrayState } from '@shared/types'
-import { applyResolvedTheme, isThemePref, type ThemePref } from '@renderer/lib/theme'
+import {
+  applyGlass,
+  applyResolvedTheme,
+  isThemePref,
+  readStoredGlass,
+  readStoredThemePref,
+  type ThemePref
+} from '@renderer/lib/theme'
 
 /* ---------------------------------------------------------------------------
  * ui.ts — view state, selection, panel geometry, dialogs and verbosity.
@@ -66,6 +73,10 @@ export interface UiState {
 
   theme: ThemePref
   setTheme(t: ThemePref): void
+
+  /** §9.11 — frosted glass, an effect over any theme rather than a theme. */
+  glass: boolean
+  setGlass(v: boolean): void
 
   dialog: DialogKind | null
   dialogNodeId: number | null
@@ -146,11 +157,18 @@ export const useUi = create<UiState>()((set, get) => ({
     void persist('clickToOpen', v ? 'true' : 'false')
   },
 
-  theme: 'system',
+  theme: readStoredThemePref(),
   setTheme: (t) => {
     set({ theme: t })
     applyResolvedTheme(t)
     void persist('theme', t)
+  },
+
+  glass: readStoredGlass(),
+  setGlass: (v) => {
+    set({ glass: v })
+    applyGlass(v)
+    void persist('glass', v ? 'true' : 'false')
   },
 
   dialog: null,
@@ -178,15 +196,18 @@ export const useUi = create<UiState>()((set, get) => ({
          theme it had not heard of back to `system`, which is why the frosted
          glass option applied at boot and then undid itself a moment later. */
       const theme: ThemePref = isThemePref(themeRaw) ? themeRaw : 'system'
+      const glass = all.glass === 'true'
       const left = Number(all[PANEL_SETTING_KEYS.leftWidth])
       const right = Number(all[PANEL_SETTING_KEYS.rightWidth])
       set({
         theme,
+        glass,
         compactMode: all.compactMode === 'true',
         clickToOpen: all.clickToOpen !== 'false',
         leftWidth: Number.isFinite(left) && left > 0 ? clampLeftWidth(left) : get().leftWidth,
         rightWidth: Number.isFinite(right) && right > 0 ? clampRightWidth(right) : get().rightWidth
       })
+      applyGlass(glass)
       applyResolvedTheme(theme)
     } catch {
       /* first launch or an unreadable DB: the defaults above are already valid */

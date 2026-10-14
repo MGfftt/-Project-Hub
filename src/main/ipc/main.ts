@@ -8,7 +8,7 @@
  *   3. a handler never throws at the renderer — failures come back as
  *      `{ok:false, error}` so a bad node cannot wedge the UI.
  */
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { basename, join } from 'node:path'
 import { promises as fsp, readFileSync } from 'node:fs'
 import { CH } from '../../shared/channels'
@@ -82,6 +82,44 @@ function fail(error: unknown): { ok: false; error: string } {
 /** `file://` URL for a path we have already validated to live in userData. */
 function toMediaUrl(abs: string): string {
   return `hub-media://local/${encodeURIComponent(abs.replace(/\\/g, '/'))}`
+}
+
+/**
+ * §9.11 — the average colour of a stored picture, as `#rrggbb`.
+ *
+ * The interface is tinted with the picture's own colour, so it has to be
+ * measured here rather than in the renderer: `nativeImage` is a main-process
+ * class, and the value must travel in the same payload as the URL, or the first
+ * paint after a restart would flash the previous tint.
+ */
+function tintOf(abs: string): string | null {
+  try {
+    const image = nativeImage.createFromPath(abs)
+    if (image.isEmpty()) return null
+    const { width, height } = image.getSize()
+    if (width <= 0 || height <= 0) return null
+    // 8x8 is plenty: a mean over 64 samples cannot differ visibly from one over
+    // four million, and it keeps the decode off the critical path.
+    const bitmap = image.resize({ width: 8, height: 8, quality: 'good' }).toBitmap()
+    let r = 0
+    let g = 0
+    let b = 0
+    let n = 0
+    // BGRA, four bytes per pixel — the same order `createFromBitmap` reads back.
+    for (let i = 0; i + 3 < bitmap.length; i += 4) {
+      const alpha = bitmap[i + 3] ?? 255
+      if (alpha < 8) continue
+      b += bitmap[i] ?? 0
+      g += bitmap[i + 1] ?? 0
+      r += bitmap[i + 2] ?? 0
+      n += 1
+    }
+    if (n === 0) return null
+    const channel = (sum: number): string => Math.round(sum / n).toString(16).padStart(2, '0')
+    return `#${channel(r)}${channel(g)}${channel(b)}`
+  } catch {
+    return null
+  }
 }
 
 /** Flat `NodeDetail[]` for the exporters: one row read + one JSON parse each. */
@@ -558,16 +596,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   })
   handle(CH.settings.all, () => ({ ...DEFAULT_SETTINGS, ...repo.allSettings() }))
 
-  handle(
-    CH.settings.background.current,
-    async (): Promise<{ filename: string | null; origin: string | null; bytes: number | null }> => {
-      const meta = readBackgroundMeta()
-      if (!meta.filename) return { filename: null, origin: null, bytes: null }
-      const safe = anchor.paths.background(meta.filename)
-      if (!safe || !pathExists(safe)) return { filename: null, origin: null, bytes: null }
-      return { ...meta, url: toMediaUrl(safe) } as { filename: string; origin: string | null; bytes: number | null }
-    }
-  )
+  handle(CH.settings.background.current, async () => {
+    const meta = readBackgroundMeta()
+    if (!meta.filename) return { filename: null, origin: null, bytes: null, url: null, tint: null }
+    const safe = anchor.paths.background(meta.filename)
+    if (!safe || !pathExists(safe)) return { filename: null, origin: null, bytes: null, url: null, tint: null }
+    return { ...meta, url: toMediaUrl(safe), tint: tintOf(safe) }
+  })
 
   handle(CH.settings.background.choose, async () => {
     const picked = await pickImage(ctx.getWindow(), t('dialog.pickBackground'))
@@ -575,9 +610,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     try {
       const { filename, bytes } = await copyIntoStore(picked, ctx.backgroundsDir)
       const meta = { filename, origin: basename(picked), bytes }
+      const stored = join(ctx.backgroundsDir, filename)
       await fsp.mkdir(ctx.userData, { recursive: true })
       await fsp.writeFile(join(ctx.userData, 'background.json'), JSON.stringify(meta, null, 2), 'utf8')
-      return { ok: true, image: { ...meta, url: toMediaUrl(join(ctx.backgroundsDir, filename)) } as never }
+      return { ok: true, image: { ...meta, url: toMediaUrl(stored), tint: tintOf(stored) } as never }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }

@@ -51,6 +51,9 @@ export interface BackgroundImage {
   /* §9.11 — a `hub-media://` URL for the stored copy; absent when the file is
      gone, which is exactly when the renderer must stop painting it. */
   url?: string
+  /* §9.11 — the picture's average colour as `#rrggbb`, computed in the main
+     process. It tints every sub-interface and decides light versus dark. */
+  tint?: string | null
 }
 
 export interface ThumbReply {
