@@ -67,14 +67,33 @@ function materialSupported(): boolean {
  * the page, so a transparent body really is see-through. Windows 10 has no
  * acrylic and never will; there the renderer's colour wash is all there is, so
  * this is a no-op rather than an error.
+ *
+ * `force` drops the material to `none` before re-applying it. Minimising the
+ * window (or hiding it to the tray) makes the compositor forget the backdrop,
+ * and re-setting the same value does not bring it back — the state has to
+ * change for DWM to re-evaluate it.
  */
-function applyWindowMaterial(win: BrowserWindow, acrylic: boolean): void {
+export function applyWindowMaterial(win: BrowserWindow, acrylic: boolean, force = false): void {
   if (!materialSupported()) return
   try {
+    if (force) win.setBackgroundMaterial('none')
     win.setBackgroundMaterial(acrylic ? 'acrylic' : 'none')
   } catch (err) {
     log.warn('setBackgroundMaterial failed', { err: (err as Error).message })
   }
+}
+
+/**
+ * §9.11 — the renderer is the only place that knows both switches, so the last
+ * answer it gave is remembered here; that is what lets the window put its own
+ * backdrop back after the compositor dropped it (see `applyWindowMaterial`).
+ */
+let wantedAcrylic = false
+
+/** §9.11 — re-assert the backdrop after the window was hidden or re-shaped. */
+export function reassertWindowMaterial(win: BrowserWindow | null): void {
+  if (!win || win.isDestroyed()) return
+  applyWindowMaterial(win, wantedAcrylic, true)
 }
 
 export interface IpcContext {
@@ -680,9 +699,17 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   // §9.11 — the renderer is the only place that knows both switches, so it says
   // which one wins; the main process only knows how to ask the compositor.
   handle(CH.appearance.setMaterial, (state: { glass?: boolean; picture?: boolean }) => {
+    wantedAcrylic = Boolean(state?.glass) && !state?.picture
     const win = ctx.getWindow()
     if (!win || win.isDestroyed()) return
-    applyWindowMaterial(win, Boolean(state?.glass) && !state?.picture)
+    applyWindowMaterial(win, wantedAcrylic)
+  })
+
+  // §9.11 — the page knows the moment it is on screen again, which is later than
+  // the window event that made it visible, so it is the better moment to put the
+  // backdrop back.
+  handle(CH.appearance.reassert, () => {
+    reassertWindowMaterial(ctx.getWindow())
   })
 
   /* --------------------------------------------------------------- window */

@@ -133,6 +133,8 @@ export interface HubApi {
   appearance: {
     /** §9.11 — Windows: draw the desktop through the window while glass is on. */
     setMaterial(state: { glass: boolean; picture: boolean }): Promise<void>
+    /** §9.11 — the page is visible again; ask for the backdrop once more. */
+    reassert(): Promise<void>
   }
   window: {
     /** §9.11 — a frameless window has no native buttons. */

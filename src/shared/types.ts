@@ -268,6 +268,12 @@ export interface Api {
      * `glass`: a chosen picture is the window's own backdrop.
      */
     setMaterial(state: { glass: boolean; picture: boolean }): Promise<void>
+    /**
+     * §9.11 — the page is visible again after the window was minimised or hidden.
+     * The compositor drops the backdrop while a window is off screen, and this is
+     * the moment it is back, so it is the moment to ask for it again.
+     */
+    reassert(): Promise<void>
   }
   window: {
     /** §9.11 — a frameless window has no native buttons; the tab strip draws them. */

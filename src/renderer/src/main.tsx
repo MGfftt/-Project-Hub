@@ -43,6 +43,16 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
   applyResolvedTheme('system', systemPrefersDark(), null)
 })
 
+/* §9.11 — the compositor drops the window's backdrop while it is off screen
+   (minimised, or hidden to the tray) and nothing tells us when it comes back:
+   the window event fires before the compositor is done, and asking then is
+   ignored. The page knows the moment it is on screen again, so that is where the
+   request is repeated from. */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return
+  void window.hub?.appearance.reassert()
+})
+
 async function syncAppearanceFromSettings(): Promise<void> {
   const hub = window.hub
   if (!hub) return

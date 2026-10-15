@@ -23,7 +23,7 @@ import { SETTING_KEYS, type BackgroundStatus, type HubEvent, type ScanProgress, 
 import { closeDatabase, getDb, getUserVersion, initDatabase } from './db'
 import { repo } from './db/repo'
 import { driverName } from './db/sqlite'
-import { registerIpcHandlers, runScan, type IpcContext } from './ipc/main'
+import { registerIpcHandlers, reassertWindowMaterial, runScan, type IpcContext } from './ipc/main'
 import { createAnchor, backgroundStoreDir, iconStoreDir, logDir } from './ipc/anchor'
 import { Thumbnailer } from './services/thumbnailer'
 import { SerialQueue, runningTaskNames } from './worker/pool'
@@ -225,6 +225,14 @@ function createWindow(): BrowserWindow {
     noteActivity()
     pushTrayState()
     send(CH.broadcast.windowVisibility, { visible: true })
+    // §9.11 — the backdrop does not survive being hidden, so it comes back with
+    // the window. Every path that makes the window visible again re-asserts it.
+    reassertWindowMaterial(mainWindow)
+  })
+
+  win.on('restore', () => {
+    noteActivity()
+    reassertWindowMaterial(mainWindow)
   })
 
   win.on('hide', () => {
@@ -243,12 +251,14 @@ function createWindow(): BrowserWindow {
     const area = screen.getDisplayMatching(win.getBounds()).workArea
     win.setBounds(area)
     send(CH.broadcast.windowMaximized, { maximized: true })
+    reassertWindowMaterial(mainWindow)
   })
 
   win.on('unmaximize', () => {
     windowMaximized = false
     windowRestoreBounds = null
     send(CH.broadcast.windowMaximized, { maximized: false })
+    reassertWindowMaterial(mainWindow)
   })
 
   // §10.2: closing hides to tray instead of quitting, unless the user turned that
@@ -288,6 +298,7 @@ function toggleMaximizeWindow(): void {
     if (win.isMaximized()) win.unmaximize()
     if (bounds) win.setBounds(bounds)
     send(CH.broadcast.windowMaximized, { maximized: false })
+    reassertWindowMaterial(win)
     return
   }
 
@@ -296,6 +307,7 @@ function toggleMaximizeWindow(): void {
   const area = screen.getDisplayMatching(windowRestoreBounds).workArea
   win.setBounds(area)
   send(CH.broadcast.windowMaximized, { maximized: true })
+  reassertWindowMaterial(win)
 }
 
 function isWindowMaximized(): boolean {

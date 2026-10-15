@@ -135,3 +135,18 @@ export function displayNameOf(node: TreeNode | undefined | null): string {
   if (!node) return ''
   return node.display_name || node.name
 }
+
+/**
+ * §8.2 — the 磁盘 group of 属性. Only a filesystem-backed node can ever report
+ * these, so a node without a path (a group, or a note that lives in the
+ * database alone) reads 「—」 instead of waiting on 「计算中…」 forever, which is
+ * what the tree's own empty state promises.
+ */
+export function diskMetric(
+  path: string | null,
+  value: number | null,
+  format: (n: number) => string
+): string {
+  if (path === null) return '—'
+  return value === null ? t('detail.computing') : format(value)
+}

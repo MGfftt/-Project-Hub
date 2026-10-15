@@ -20,12 +20,13 @@ import {
   tagStyle
 } from '@renderer/lib/colors'
 import { t, tCount } from '@renderer/lib/i18n'
-import { descendantIds, kindLabel, statusLabel } from '@renderer/lib/tree'
+import { descendantIds, diskMetric, kindLabel, statusLabel } from '@renderer/lib/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
 import EmptyState from '@renderer/components/EmptyState'
 import Heatmap from '@renderer/components/Heatmap'
+import NodeIcon from '@renderer/components/NodeIcon'
 
 /* ---------------------------------------------------------------------------
  * DetailPanel — the right-hand detail column (§4) with the three frozen tabs
@@ -526,15 +527,9 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
             </Group>
 
             <Group title={t('detail.disk')}>
-              <Field label={t('detail.size')}>
-                {stats === null || stats.diskSizeBytes === null
-                  ? t('detail.computing')
-                  : formatBytes(stats.diskSizeBytes)}
-              </Field>
+              <Field label={t('detail.size')}>{diskMetric(path, stats?.diskSizeBytes ?? null, formatBytes)}</Field>
               <Field label={t('detail.fileCount')}>
-                {stats === null || stats.fileCount === null
-                  ? t('detail.computing')
-                  : formatCount(stats.fileCount)}
+                {diskMetric(path, stats?.fileCount ?? null, formatCount)}
               </Field>
               <Field label={t('detail.createdAt')}>
                 {stats === null ? '—' : formatDateTime(stats.createdAt)}
@@ -554,12 +549,15 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
             <Group title={t('detail.icon')}>
               <Field label={t('detail.icon')}>
                 <span className="flex items-center gap-2">
+                  {/* §8.3 — the preview is the node's real icon, drawn by the same
+                      component the tree uses, so it can never be a clipped
+                      character stand-in. */}
                   <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px]"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border"
                     style={{ borderColor: 'var(--border)' }}
                     aria-hidden
                   >
-                    {iconToken(node)}
+                    <NodeIcon node={node} size={14} />
                   </span>
                   <span
                     className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-dim)]"
@@ -835,12 +833,6 @@ function Field({ label, children }: { label: string; children: ReactNode }): JSX
       <dd className="min-w-0 flex-1 break-words text-xs leading-5 text-[var(--text)]">{children}</dd>
     </div>
   )
-}
-
-/** A one-character stand-in for the icon: emoji verbatim, otherwise its kind. */
-function iconToken(node: TreeNode): string {
-  if (node.icon_type === 'emoji' && node.icon_value) return node.icon_value
-  return t(ICON_TYPE_KEYS[node.icon_type]).slice(0, 1)
 }
 
 export default DetailPanel

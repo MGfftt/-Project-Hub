@@ -66,7 +66,9 @@ export const CH = {
   },
   appearance: {
     /** §9.11 — let the compositor draw the desktop behind the window. */
-    setMaterial: 'appearance:setMaterial'
+    setMaterial: 'appearance:setMaterial',
+    /** §9.11 — the window is visible again; the backdrop has to be re-applied. */
+    reassert: 'appearance:reassert'
   },
   window: {
     /** §9.11 — the window is frameless, so the renderer draws its own controls. */

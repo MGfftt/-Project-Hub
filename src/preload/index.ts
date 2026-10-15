@@ -162,7 +162,8 @@ const api: HubApi = {
     }
   },
   appearance: {
-    setMaterial: (state) => invoke<void>(CH.appearance.setMaterial, state)
+    setMaterial: (state) => invoke<void>(CH.appearance.setMaterial, state),
+    reassert: () => invoke<void>(CH.appearance.reassert)
   },
   window: {
     minimize: () => invoke<void>(CH.window.minimize),

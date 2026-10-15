@@ -9,7 +9,7 @@ import {
   formatNoteLength,
   formatRelativeTime
 } from '@renderer/lib/format'
-import { kindLabel, statusLabel } from '@renderer/lib/tree'
+import { kindLabel, statusLabel, diskMetric } from '@renderer/lib/tree'
 import { tagStyle } from '@renderer/lib/colors'
 import { t } from '@renderer/lib/i18n'
 import { useUi } from '@renderer/stores/ui'
@@ -108,22 +108,8 @@ export function StatsDialog({ nodeId, onClose }: StatsDialogProps): JSX.Element 
       </Group>
 
       <Group title={t('detail.disk')}>
-        <Row
-          label={t('detail.size')}
-          value={
-            stats === null || stats.diskSizeBytes === null
-              ? t('detail.computing')
-              : formatBytes(stats.diskSizeBytes)
-          }
-        />
-        <Row
-          label={t('detail.fileCount')}
-          value={
-            stats === null || stats.fileCount === null
-              ? t('detail.computing')
-              : formatCount(stats.fileCount)
-          }
-        />
+        <Row label={t('detail.size')} value={diskMetric(path, stats?.diskSizeBytes ?? null, formatBytes)} />
+        <Row label={t('detail.fileCount')} value={diskMetric(path, stats?.fileCount ?? null, formatCount)} />
         <Row
           label={t('detail.childCount')}
           value={stats ? formatCount(stats.childCount) : '…'}

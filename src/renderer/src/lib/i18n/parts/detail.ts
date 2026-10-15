@@ -32,7 +32,7 @@ export const detail: Dict = {
   'detail.note': ['笔记', 'Note'],
   'detail.computing': ['计算中…', 'Calculating…'],
 
-  /* --- icon types (the label doubles as the one-character stand-in) ------ */
+  /* --- icon types (shown beside the icon preview chip) ------------------- */
   'detail.iconAuto': ['自动', 'Auto'],
   'detail.iconLucide': ['内置', 'Built-in'],
   'detail.iconEmoji': ['表情', 'Emoji'],
