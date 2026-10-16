@@ -170,6 +170,11 @@ export function ProjectMap(): JSX.Element {
   const liveDrag = useRef<{ id: number; over: number | null } | null>(null)
   const justDragged = useRef(false)
 
+  /* §9.9 pan state: the scroll offset the drag started from, and whether a pan
+   * is live (the cursor and the text selection switch on it). */
+  const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const [panning, setPanning] = useState(false)
+
   const isOpen = useCallback((id: number) => open[id] === true || open[id] === undefined, [open])
 
   const { placed, width, height } = useMemo(
@@ -247,6 +252,41 @@ export function ProjectMap(): JSX.Element {
   )
 
   const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed])
+
+  /* --- §9.9 panning the canvas --------------------------------------- */
+
+  /**
+   * Dragging the empty canvas moves the viewport.
+   *
+   * The wheel zooms, so a scroll bar would otherwise be the only way to reach
+   * a corner of a zoomed map. A drag that starts on a card belongs to the card
+   * (the move above), so this only claims the pointer when it went down on the
+   * background — the card keeps its own capture and its own drag.
+   */
+  const onBoxPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0) return
+    const box = boxRef.current
+    if (!box) return
+    if ((e.target as HTMLElement).closest('[data-map-card]')) return
+    panRef.current = { x: e.clientX, y: e.clientY, left: box.scrollLeft, top: box.scrollTop }
+    setPanning(true)
+    box.setPointerCapture(e.pointerId)
+  }
+
+  const onBoxPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const start = panRef.current
+    const box = boxRef.current
+    if (start === null || !box) return
+    box.scrollLeft = start.left - (e.clientX - start.x)
+    box.scrollTop = start.top - (e.clientY - start.y)
+  }
+
+  const onBoxPointerUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const box = boxRef.current
+    panRef.current = null
+    setPanning(false)
+    if (box?.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId)
+  }
 
   /* --- §9.9 dragging a card onto another card ------------------------ */
 
@@ -424,9 +464,16 @@ export function ProjectMap(): JSX.Element {
 
       <div
         ref={boxRef}
+        data-map-box
+        onPointerDown={onBoxPointerDown}
+        onPointerMove={onBoxPointerMove}
+        onPointerUp={onBoxPointerUp}
+        onPointerCancel={onBoxPointerUp}
         className={
           /* Selecting text mid-drag would highlight half the map. */
-          'relative min-h-0 flex-1 overflow-auto' + (ghost === null ? '' : ' select-none')
+          'relative min-h-0 flex-1 overflow-auto' +
+          (ghost === null && !panning ? '' : ' select-none') +
+          (panning ? ' cursor-grabbing' : ' cursor-grab')
         }
       >
         <div style={{ width: width * scale, height: height * scale, position: 'relative' }}>

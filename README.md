@@ -194,7 +194,7 @@ project-hub/
 
 *全景图——所有根目录、分组和子目录排成一张树状图，卡片可以直接按住拖动换父节点。*
 
-**没选中任何节点时，中间的整块区域是一张全景图**：所有根目录、分组和子目录从左到右排成一张树状图，卡片之间用连线相接。每张卡片显示图标、名称、类型和直接子节点数，右上角的圆点表示状态；点卡片左上角的 `⌄` / `›` 就地展开或收起一个分支，滚轮缩放、`Shift + 滚轮` 横向滚动、右上角的 `⤢` 一键适配窗口。顶部的计数条实时显示「项目 / 分组 / 目录」各有多少。
+**没选中任何节点时，中间的整块区域是一张全景图**：所有根目录、分组和子目录从左到右排成一张树状图，卡片之间用连线相接。每张卡片显示图标、名称、类型和直接子节点数，右上角的圆点表示状态；点卡片左上角的 `⌄` / `›` 就地展开或收起一个分支，滚轮缩放、`Shift + 滚轮` 横向滚动、**按住空白处拖动即可平移视图**、右上角的 `⤢` 一键适配窗口。顶部的计数条实时显示「项目 / 分组 / 目录」各有多少。
 
 窗口本身是**左树 + 中内容**两栏。左栏是项目树：每一行左侧的 `›` / `⌄` 展开折叠，缩进参考线标出层级，折叠的父节点会显示它藏了多少个子节点。中间栏顶部是 `全景图` / `概览` / `改动时间线` 三个页签；最右侧的 `属性` 开关控制第三栏，用来改状态、图标和标签，默认收起。
 
@@ -224,7 +224,7 @@ project-hub/
 
 **备注**：全景图右上角的「添加备注」会给当前选中的节点挂一条备注（概览页里也有这个按钮）。备注是一条不指向磁盘的虚拟节点，正文保存在本地数据库里，在概览页的「备注内容」框里直接写，改完自动保存。备注可以挂在任何项目、分组或目录下面，用来记项目用途、待办、为什么先放下之类的事情。
 
-**在全景图里直接拖动卡片**：按住任意一张卡片拖到另一张卡片上松手，被拖的节点就挂到目标节点下面；拖到空白处松手不作任何改动。拖到自己的子孙、或拖到一个备注上都会被拒绝，不会出现循环。拖动时目标卡片会高亮，指针旁边跟着一张「<名字> 松开即可移入」的提示条。**滚轮直接缩放**（以指针位置为中心，`Shift + 滚轮` 仍然是横向滚动，右上角的 `⤢` 一键适配），缩放范围 35%–160%。全景图和左树共用同一套移动逻辑：只改数据库里的位置，磁盘上不动，下一次扫描也不会把它挪回去。
+**在全景图里直接拖动卡片**：按住任意一张卡片拖到另一张卡片上松手，被拖的节点就挂到目标节点下面；拖到空白处松手不作任何改动。拖到自己的子孙、或拖到一个备注上都会被拒绝，不会出现循环。拖动时目标卡片会高亮，指针旁边跟着一张「<名字> 松开即可移入」的提示条。**滚轮直接缩放**（以指针位置为中心，`Shift + 滚轮` 仍然是横向滚动，右上角的 `⤢` 一键适配），缩放范围 35%–160%；**在空白处按住左键拖动可以平移视图**，卡片自己仍然是拖动换父节点，两者互不干扰。全景图和左树共用同一套移动逻辑：只改数据库里的位置，磁盘上不动，下一次扫描也不会把它挪回去。
 
 **给节点上色**：每个节点（分组、项目、目录、备注都算）都能单独设一个颜色。在右侧「属性」面板的「颜色」一行点色块即可，也可以右键树里的节点，用菜单最下面那一排同样的色块；点「默认」清除。颜色会成为节点图标背后的底色，图标本身也换成这个颜色，全景图上的卡片跟着一起变——用来一眼分辨一组相关的项目。
 
@@ -424,7 +424,7 @@ All application data always lives in `%APPDATA%\project-hub\`, regardless of whe
 
 *The map — every root, group and subfolder as a tree of cards; pick a card up and drop it on another to change its parent.*
 
-**With nothing selected, the whole middle pane is a workspace map**: every root, group and subfolder laid out left to right as a tree of cards joined by connector lines. Each card shows its icon, name, kind and direct-child count, with a status dot in the corner. The `⌄` / `›` on a card expands or collapses that branch in place — wheel to zoom, `Shift + wheel` to pan, and `⤢` fits the map to the window. The strip along the top counts projects, groups and folders live.
+**With nothing selected, the whole middle pane is a workspace map**: every root, group and subfolder laid out left to right as a tree of cards joined by connector lines. Each card shows its icon, name, kind and direct-child count, with a status dot in the corner. The `⌄` / `›` on a card expands or collapses that branch in place — wheel to zoom, `Shift + wheel` to pan, **drag the empty canvas to move the view**, and `⤢` fits the map to the window. The strip along the top counts projects, groups and folders live.
 
 The window itself is two columns: **tree on the left, content in the middle**. In the tree the `›` / `⌄` on each row expands or collapses it, indent guides mark the levels, and a collapsed parent shows how many children it hides. The middle column carries **Map** / **Overview** / **Timeline** tabs, and **Properties** on the right toggles a third column for status, icon and tags — folded by default.
 
@@ -450,7 +450,7 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 
 **Notes.** **Add a note** (top right of the map, and also a button on every overview page) attaches a note to the selected node. A note is a virtual node that points at nothing on disk; its body is stored in the local database and edited in the **Note body** box on the overview page, which auto-saves as you type. Notes hang off projects, groups or folders and are the place for what a project is for, what comes next, or why it was set aside.
 
-**Dragging a card on the map.** Pick up any card, drop it onto another card, and the dragged node becomes a child of that one; let go over empty space and nothing changes. Dropping onto the node's own descendants, or onto a note, is refused, so no cycle can form. The card under the pointer highlights while you drag, and a small label reading **Release to move it in** follows the cursor next to the node's name. **The wheel zooms the map** — centred on the pointer, between 35% and 160%, with `Shift + wheel` still scrolling sideways and the `⤢` button in the toolbar fitting the width in one click. The map and the tree share one move path: it rewrites the position in the database only, never touches the disk, and the next scan does not put the node back where the disk says it belongs.
+**Dragging a card on the map.** Pick up any card, drop it onto another card, and the dragged node becomes a child of that one; let go over empty space and nothing changes. Dropping onto the node's own descendants, or onto a note, is refused, so no cycle can form. The card under the pointer highlights while you drag, and a small label reading **Release to move it in** follows the cursor next to the node's name. **The wheel zooms the map** — centred on the pointer, between 35% and 160%, with `Shift + wheel` still scrolling sideways and the `⤢` button in the toolbar fitting the width in one click. Holding the left button on an empty spot drags the canvas itself — a drag that starts on a card is still a re-parent, so the two never fight. The map and the tree share one move path: it rewrites the position in the database only, never touches the disk, and the next scan does not put the node back where the disk says it belongs.
 
 **Colouring a node.** Every node — group, project, folder or note — can carry its own colour. Click a swatch in the **Colour** row of the **Properties** panel, or right-click a node in the tree and use the same row at the bottom of the menu; **Default** clears it. The colour becomes the tint behind the node's icon, the icon itself takes the colour, and the map card follows — which makes a family of related projects easy to pick out at a glance.
 
