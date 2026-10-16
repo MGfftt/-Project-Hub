@@ -180,6 +180,27 @@ describe('tree building (§6.2 / §7.4)', () => {
     expect(repo.getNode(folder.id)!.parent_id).toBe(group.id)
   })
 
+  it('moveNode keeps the node in its new parent when its old index differs (§7.4)', () => {
+    seed()
+    /* `a` sits at root order 1, so re-indexing the moved row (which still
+     * carries its old parent) used to write the root back and undo the move —
+     * the group-onto-group drag that silently did nothing on screen. */
+    const a = repo.listNodes().find((n) => n.name === 'a')!
+    const group = repo.listNodes().find((n) => n.kind === 'group')!
+    repo.moveNode(a.id, group.id, 0)
+    expect(repo.getNode(a.id)!.parent_id).toBe(group.id)
+    expect(repo.tree().find((n) => n.kind === 'group')!.children!.map((n) => n.name)).toEqual([
+      'a',
+      'c'
+    ])
+
+    /* …and back out again: a virtual group is the only container whose
+     * membership can be undone, so unbinding is the same call at `null`. */
+    repo.moveNode(a.id, null, 1)
+    expect(repo.getNode(a.id)!.parent_id).toBeNull()
+    expect(repo.tree().map((n) => n.name)).toEqual(['b', 'a', '分组'])
+  })
+
   it('refuses to move a node beneath its own descendant', () => {
     const outer = repo.createGroup('outer', null)
     const inner = repo.createGroup('inner', outer)

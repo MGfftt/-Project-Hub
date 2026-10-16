@@ -9,6 +9,7 @@ import {
   Palette,
   Pencil,
   Copy,
+  FolderMinus,
   FolderOpen,
   Trash2
 } from 'lucide-react'
@@ -49,6 +50,8 @@ export interface ContextMenuProps {
   node: TreeNode
   x: number
   y: number
+  /** Whether this node is currently held by a virtual group (§7.8). */
+  insideGroup?: boolean
   onClose: () => void
   /** Frozen order is applied here, so callers only supply behaviour. */
   onOpenFolder?: (node: TreeNode) => void
@@ -62,6 +65,8 @@ export interface ContextMenuProps {
   /** §9.8 — shown as a swatch row so a colour is one right-click away. */
   onChangeColor?: (node: TreeNode, color: string | null) => void
   onNewGroup?: (node: TreeNode) => void
+  /** §7.8 — only meaningful while the node sits inside a virtual group. */
+  onRemoveFromGroup?: (node: TreeNode) => void
   onRemove?: (node: TreeNode) => void
 }
 
@@ -71,6 +76,7 @@ export function ContextMenu({
   node,
   x,
   y,
+  insideGroup = false,
   onClose,
   onOpenFolder,
   onReveal,
@@ -82,6 +88,7 @@ export function ContextMenu({
   onChangeIcon,
   onChangeColor,
   onNewGroup,
+  onRemoveFromGroup,
   onRemove
 }: ContextMenuProps): JSX.Element {
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -165,6 +172,17 @@ export function ContextMenu({
       icon: <FolderPlus size={ICON_SIZE} aria-hidden />,
       separatorBefore: true,
       run: () => onNewGroup?.(node)
+    },
+    {
+      id: 'ungroup',
+      label: t('tree.removeFromGroup'),
+      icon: <FolderMinus size={ICON_SIZE} aria-hidden />,
+      /* §7.8 — only a node held by a *group* has a membership to undo. The
+       * panel supplies the answer; a node inside a real folder keeps the disk's
+       * own structure and has nothing to unbind. */
+      disabled: !insideGroup,
+      hint: insideGroup ? t('tree.removeFromGroupHint') : undefined,
+      run: () => onRemoveFromGroup?.(node)
     },
     {
       id: 'remove',

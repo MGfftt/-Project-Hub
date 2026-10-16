@@ -4,8 +4,8 @@ import type { Dict } from '../types'
 export const map: Dict = {
   /* --- ProjectMap: header, legend, zoom ---------------------------------- */
   'map.hint': [
-    '单击卡片查看，点箭头展开，拖动卡片可换父节点',
-    'Click a card to open it, the arrow to expand, drag a card to change its parent'
+    '单击卡片查看，点箭头展开，拖动卡片可换父节点，滚轮缩放',
+    'Click a card to open it, the arrow to expand, drag a card to change its parent, scroll to zoom'
   ],
   'map.addNote': ['添加备注', 'Add a note'],
   'map.addNote.title': ['在当前选中的节点下添加一条备注', 'Add a note under the selected node'],

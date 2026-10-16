@@ -23,7 +23,7 @@ import { useUi } from '@renderer/stores/ui'
 import { useEvents } from '@renderer/stores/events'
 import { formatRelativeTime } from '@renderer/lib/format'
 import { t, tCount } from '@renderer/lib/i18n'
-import { descendantIds, kindLabel } from '@renderer/lib/tree'
+import { descendantIds, findParent, kindLabel, ungroupTarget } from '@renderer/lib/tree'
 
 /* ---------------------------------------------------------------------------
  * TreePanel — the left column (§9.1).
@@ -290,6 +290,26 @@ export function TreePanel(): JSX.Element {
       }
     },
     [select, setStatus]
+  )
+
+  /**
+   * §7.8 — 移出分组. Only the virtual membership is undone: the node keeps its
+   * path, its children and its place on disk, and lands one level above the
+   * group it was in, right behind it.
+   */
+  const removeFromGroup = useCallback(
+    async (node: TreeNode) => {
+      const target = ungroupTarget(useTree.getState().nodes, node.id)
+      if (!target) return
+      try {
+        await window.hub.nodes.move(node.id, target.parentId, target.index)
+        await useTree.getState().load()
+        setStatus(t('tree.ungrouped'), 'info')
+      } catch (err) {
+        setStatus(t('tree.ungroupFailed', { error: String(err) }), 'error')
+      }
+    },
+    [setStatus]
   )
 
   const viewChanges = useCallback((node: TreeNode) => {
@@ -623,6 +643,8 @@ export function TreePanel(): JSX.Element {
             })
           }}
           onNewGroup={(node) => void createChildGroup(node)}
+          insideGroup={menu.node ? findParent(nodes, menu.node.id)?.kind === 'group' : false}
+          onRemoveFromGroup={(node) => void removeFromGroup(node)}
           onRemove={(node) => {
             window.dispatchEvent(new CustomEvent('hub:confirm-remove', { detail: node.id }))
           }}

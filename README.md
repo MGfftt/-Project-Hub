@@ -220,9 +220,11 @@ project-hub/
 
 **把项目拖进分组**：分组是虚拟节点（没有磁盘目录）。直接按住一个项目或目录拖到分组**卡片/行本身**上，松手就归入该分组——空分组同样可以接收，不需要先在分组里建子分组。行上的**任意位置**都算「放进分组」，整行高度都收（以前只有中间的 16px 算数，往偏上一点松手就变成「插到前面」，看起来就像没生效）；只有在分组行最上/最下缘那 2.5px 松手才是「插到它前面/后面」。分组只改变它在树里的位置，不会移动磁盘上的文件；下一次扫描也不会把节点挪回原位。
 
+**把节点从分组里摘出来**：拖进分组是可逆的。选中一个已经归入分组的节点（也可以是分组套分组的子分组），**右键 → 移出分组**，或者在右侧「属性」面板的「操作」一行点「移出分组」，它就会回到该分组的上一级、紧跟在这个分组后面。**只有虚拟分组可以解绑**：真实目录里的项目、目录仍然照着磁盘的层级显示，属性面板里不会出现这个按钮，右键菜单里的那一项也是灰的——磁盘上的结构本来就是固定的，程序只调整自己建的虚拟归属。摘出来同样只改数据库里的位置，磁盘上一个文件都不会动。
+
 **备注**：全景图右上角的「添加备注」会给当前选中的节点挂一条备注（概览页里也有这个按钮）。备注是一条不指向磁盘的虚拟节点，正文保存在本地数据库里，在概览页的「备注内容」框里直接写，改完自动保存。备注可以挂在任何项目、分组或目录下面，用来记项目用途、待办、为什么先放下之类的事情。
 
-**在全景图里直接拖动卡片**：按住任意一张卡片拖到另一张卡片上松手，被拖的节点就挂到目标节点下面；拖到空白处松手不作任何改动。拖到自己的子孙、或拖到一个备注上都会被拒绝，不会出现循环。拖动时目标卡片会高亮，指针旁边跟着一张「<名字> 松开即可移入」的提示条。全景图和左树共用同一套移动逻辑：只改数据库里的位置，磁盘上不动，下一次扫描也不会把它挪回去。
+**在全景图里直接拖动卡片**：按住任意一张卡片拖到另一张卡片上松手，被拖的节点就挂到目标节点下面；拖到空白处松手不作任何改动。拖到自己的子孙、或拖到一个备注上都会被拒绝，不会出现循环。拖动时目标卡片会高亮，指针旁边跟着一张「<名字> 松开即可移入」的提示条。**滚轮直接缩放**（以指针位置为中心，`Shift + 滚轮` 仍然是横向滚动，右上角的 `⤢` 一键适配），缩放范围 35%–160%。全景图和左树共用同一套移动逻辑：只改数据库里的位置，磁盘上不动，下一次扫描也不会把它挪回去。
 
 **给节点上色**：每个节点（分组、项目、目录、备注都算）都能单独设一个颜色。在右侧「属性」面板的「颜色」一行点色块即可，也可以右键树里的节点，用菜单最下面那一排同样的色块；点「默认」清除。颜色会成为节点图标背后的底色，图标本身也换成这个颜色，全景图上的卡片跟着一起变——用来一眼分辨一组相关的项目。
 
@@ -444,9 +446,11 @@ Adding a root normally opens the system folder dialog, but you never *need* it: 
 
 **Dragging a project into a group.** A group is a virtual node with no folder on disk. Pick up a project or a folder and drop it **onto the group row or card itself** — an empty group accepts the drop too, with no need to create a sub-group first. Anywhere on the row counts as *into the group*: the whole height accepts the drop (previously only the middle 16px did, so releasing slightly high became "insert before this row" and looked as if nothing had happened); only the outermost 2.5px at the very top or bottom of a group row still means *insert before/after*. A group changes where the node sits in the tree; it never moves anything on disk, and the next scan does not put the node back where the disk says it belongs.
 
+**Taking a node back out of a group.** Dropping into a group is reversible. Select a node that has been filed into one — a subgroup inside a bigger group works too — and use **right-click → Remove from group**, or the **Remove from group** button in the **Actions** row of the **Properties** panel: it lands one level up, directly behind the group it left. **Only a virtual group can be unbound.** A project or folder inside a real directory still follows the structure the disk already has, so that button is absent from the panel and the menu entry is greyed out — the app only re-links the virtual membership it created. Unbinding rewrites the position in the database only; not a single file on disk moves.
+
 **Notes.** **Add a note** (top right of the map, and also a button on every overview page) attaches a note to the selected node. A note is a virtual node that points at nothing on disk; its body is stored in the local database and edited in the **Note body** box on the overview page, which auto-saves as you type. Notes hang off projects, groups or folders and are the place for what a project is for, what comes next, or why it was set aside.
 
-**Dragging a card on the map.** Pick up any card, drop it onto another card, and the dragged node becomes a child of that one; let go over empty space and nothing changes. Dropping onto the node's own descendants, or onto a note, is refused, so no cycle can form. The card under the pointer highlights while you drag, and a small label reading **Release to move it in** follows the cursor next to the node's name. The map and the tree share one move path: it rewrites the position in the database only, never touches the disk, and the next scan does not put the node back where the disk says it belongs.
+**Dragging a card on the map.** Pick up any card, drop it onto another card, and the dragged node becomes a child of that one; let go over empty space and nothing changes. Dropping onto the node's own descendants, or onto a note, is refused, so no cycle can form. The card under the pointer highlights while you drag, and a small label reading **Release to move it in** follows the cursor next to the node's name. **The wheel zooms the map** — centred on the pointer, between 35% and 160%, with `Shift + wheel` still scrolling sideways and the `⤢` button in the toolbar fitting the width in one click. The map and the tree share one move path: it rewrites the position in the database only, never touches the disk, and the next scan does not put the node back where the disk says it belongs.
 
 **Colouring a node.** Every node — group, project, folder or note — can carry its own colour. Click a swatch in the **Colour** row of the **Properties** panel, or right-click a node in the tree and use the same row at the bottom of the menu; **Default** clears it. The colour becomes the tint behind the node's icon, the icon itself takes the colour, and the map card follows — which makes a family of related projects easy to pick out at a glance.
 

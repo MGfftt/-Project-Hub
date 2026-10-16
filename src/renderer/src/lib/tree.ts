@@ -21,6 +21,49 @@ export function childrenOf(node: TreeNode): TreeNode[] {
   return node.children ?? EMPTY_CHILDREN
 }
 
+/**
+ * The node that holds `id`, or `null` when it sits at the top of the forest.
+ * `nodes` is the nested forest, which is what the store and every panel carry.
+ */
+export function findParent(nodes: TreeNode[], id: number): TreeNode | null {
+  const stack = [...nodes]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    for (const child of childrenOf(node)) {
+      if (child.id === id) return node
+      stack.push(child)
+    }
+  }
+  return null
+}
+
+/** Where a node lands when it is taken out of the group that holds it. */
+export interface UngroupTarget {
+  parentId: number | null
+  index: number
+}
+
+/**
+ * §7.8 — 移出分组: one level up, directly after the group it leaves.
+ *
+ * Only a *virtual* parent can be unbound. A node inside a real folder is part of
+ * the structure the disk already has, and re-parenting it in the app would only
+ * misrepresent that; a group is the app's own container, so a node — or a whole
+ * subgroup — can be lifted out of one at any time. Returns `null` when there is
+ * nothing to unbind, which is also what the UI uses to hide the action.
+ */
+export function ungroupTarget(nodes: TreeNode[], id: number): UngroupTarget | null {
+  const parent = findParent(nodes, id)
+  if (!parent || parent.kind !== 'group') return null
+  const grand = findParent(nodes, parent.id)
+  const siblings = grand ? childrenOf(grand) : nodes
+  const at = siblings.findIndex((n) => n.id === parent.id)
+  return {
+    parentId: grand ? grand.id : null,
+    index: at < 0 ? siblings.length : at + 1
+  }
+}
+
 /** Forest → id map (first wins, so a duplicated id cannot shadow its parent). */
 export function indexById(nodes: TreeNode[]): Map<number, TreeNode> {
   const map = new Map<number, TreeNode>()

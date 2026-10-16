@@ -36,6 +36,9 @@ const SLOT = CARD_H + GAP_Y
 const MAX_CARDS = 4000
 const MIN_SCALE = 0.35
 const MAX_SCALE = 1.6
+/** §9.9 — one wheel notch (or one trackpad gesture sample) changes the zoom by
+ *  this much before clamping. */
+const WHEEL_STEP = 0.1
 /** §9.9 — a card only becomes a drag source after this much pointer travel, so
  *  a plain click still selects instead of starting (and instantly ending) a
  *  one-pixel drag. */
@@ -147,7 +150,17 @@ export function ProjectMap(): JSX.Element {
 
   const boxRef = useRef<HTMLDivElement | null>(null)
   const [scale, setScale] = useState(1)
+  /* The wheel handler must read the scale that the *last* gesture produced, not
+   * the one React has committed, so the number lives in a ref as well. */
+  const scaleRef = useRef(1)
   const autoFitted = useRef(false)
+
+  const applyScale = useCallback((next: number) => {
+    const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(next * 100) / 100))
+    scaleRef.current = clamped
+    setScale(clamped)
+    return clamped
+  }, [])
 
   /* §9.9 drag state. The live drop target is kept in a ref as well as in state:
    * `pointermove` updates arrive faster than React commits, and `pointerup` must
@@ -163,27 +176,67 @@ export function ProjectMap(): JSX.Element {
     () => layoutForest(nodes, isOpen),
     [nodes, isOpen]
   )
+  /** The scroll box is only rendered when there is something to lay out. */
+  const hasMap = placed.length > 0
 
   /* Fit to the column once the tree is known — a wide forest is unreadable at
    * 100%, and the user can still zoom afterwards. */
   useEffect(() => {
-    if (autoFitted.current || placed.length === 0) return
+    if (autoFitted.current || !hasMap) return
     const box = boxRef.current
     if (!box) return
     const next = Math.min(1, Math.max(MIN_SCALE, (box.clientWidth - 16) / width))
     autoFitted.current = true
-    setScale(next)
-  }, [placed.length, width])
+    applyScale(next)
+  }, [hasMap, width, applyScale])
 
-  const zoom = useCallback((delta: number) => {
-    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round((s + delta) * 100) / 100)))
-  }, [])
+  const zoom = useCallback(
+    (delta: number) => {
+      applyScale(scaleRef.current + delta)
+    },
+    [applyScale]
+  )
 
   const fit = useCallback(() => {
     const box = boxRef.current
     if (!box) return
-    setScale(Math.min(1, Math.max(MIN_SCALE, (box.clientWidth - 16) / width)))
-  }, [width])
+    applyScale((box.clientWidth - 16) / width)
+  }, [width, applyScale])
+
+  /* §9.9 — the wheel zooms the map. The listener is native and non-passive
+   * because the browser would otherwise scroll the box (React's own `onWheel`
+   * is registered passively at the root and cannot `preventDefault()`), and the
+   * point under the cursor is kept in place: the scroll offset scales with the
+   * content, the pointer does not. */
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const onWheel = (event: WheelEvent): void => {
+      /* Shift + wheel is the documented horizontal scroll, so it stays with the
+       * browser instead of turning into a zoom. */
+      if (event.deltaY === 0 || event.ctrlKey || event.shiftKey) return
+      event.preventDefault()
+      const rect = box.getBoundingClientRect()
+      const px = event.clientX - rect.left
+      const py = event.clientY - rect.top
+      const before = scaleRef.current
+      const after = applyScale(before + (event.deltaY > 0 ? -WHEEL_STEP : WHEEL_STEP))
+      if (after === before) return
+      const ratio = after / before
+      /* The wrapper gets the new transform on the next frame, so the offset is
+       * corrected then as well. */
+      requestAnimationFrame(() => {
+        const node = boxRef.current
+        if (!node) return
+        node.scrollLeft = (node.scrollLeft + px) * ratio - px
+        node.scrollTop = (node.scrollTop + py) * ratio - py
+      })
+    }
+    box.addEventListener('wheel', onWheel, { passive: false })
+    return () => box.removeEventListener('wheel', onWheel)
+    /* The box only exists once the forest has nodes (the empty state returns
+     * early), so the listener is attached when it appears. */
+  }, [applyScale, hasMap])
 
   const onCardClick = useCallback(
     (node: TreeNode) => {

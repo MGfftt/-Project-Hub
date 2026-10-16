@@ -20,7 +20,7 @@ import {
   tagStyle
 } from '@renderer/lib/colors'
 import { t, tCount } from '@renderer/lib/i18n'
-import { descendantIds, diskMetric, kindLabel, statusLabel } from '@renderer/lib/tree'
+import { descendantIds, diskMetric, findParent, kindLabel, statusLabel, ungroupTarget } from '@renderer/lib/tree'
 import { useEvents } from '@renderer/stores/events'
 import { useTree } from '@renderer/stores/tree'
 import { useUi } from '@renderer/stores/ui'
@@ -109,6 +109,10 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
   const id = node.id
   const setStatus = useUi((s) => s.setStatus)
   const revision = useTree((s) => s.revision)
+  const nodes = useTree((s) => s.nodes)
+  /* §7.8 — only a node held by a *group* has a membership this panel can undo;
+   * anything inside a real folder keeps the structure the disk already has. */
+  const insideGroup = useMemo(() => findParent(nodes, id)?.kind === 'group', [nodes, id])
 
   const [tab, setTab] = useState<TabId>('overview')
   const [stats, setStats] = useState<NodeStats | null>(null)
@@ -337,6 +341,23 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
       .catch(() => setStatus(t('detail.revealFailed'), 'error'))
   }
 
+  /* §7.8 — 移出分组: the panel is the second place the membership can be undone,
+   * next to the row's context menu. The node moves one level above its group and
+   * the disk is not touched. */
+  const onRemoveFromGroup = (): void => {
+    const hub = window.hub
+    if (!hub) return
+    const target = ungroupTarget(nodes, id)
+    if (!target) return
+    void hub.nodes
+      .move(id, target.parentId, target.index)
+      .then(() => {
+        useTree.getState().bump()
+        setStatus(t('tree.ungrouped'), 'info')
+      })
+      .catch((err: unknown) => setStatus(t('tree.ungroupFailed', { error: String(err) }), 'error'))
+  }
+
   /* --- 改动: this node plus every descendant ------------------------ */
 
   const nodeIds = useMemo(() => descendantIds(node, byId), [node, byId])
@@ -501,28 +522,43 @@ function NodeDetailView({ node, byId }: NodeDetailViewProps): JSX.Element {
                 </span>
               </Field>
               <Field label={t('detail.actions')}>
-                {path === null ? (
-                  <span className="text-[11px] text-[var(--text-dim)]">
-                    {t('detail.virtualNode')}
-                  </span>
-                ) : (
-                  <span className="flex flex-wrap items-center gap-1">
+                <span className="flex flex-wrap items-center gap-1">
+                  {path === null ? (
+                    <span className="text-[11px] text-[var(--text-dim)]">
+                      {t('detail.virtualNode')}
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
+                        onClick={onCopyPath}
+                      >
+                        {t('detail.copyPath')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
+                        onClick={onRevealFolder}
+                      >
+                        {t('detail.revealInManager')}
+                      </button>
+                    </>
+                  )}
+                  {/* §7.8 — a node (or a whole subgroup) held by a group can be
+                      lifted out of it from here, where the membership is
+                      visible, as well as from the row's context menu. */}
+                  {insideGroup ? (
                     <button
                       type="button"
                       className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
-                      onClick={onCopyPath}
+                      title={t('tree.removeFromGroupHint')}
+                      onClick={onRemoveFromGroup}
                     >
-                      {t('detail.copyPath')}
+                      {t('tree.removeFromGroup')}
                     </button>
-                    <button
-                      type="button"
-                      className="btn focus-ring h-5 shrink-0 px-1.5 py-0 text-[11px]"
-                      onClick={onRevealFolder}
-                    >
-                      {t('detail.revealInManager')}
-                    </button>
-                  </span>
-                )}
+                  ) : null}
+                </span>
               </Field>
             </Group>
 

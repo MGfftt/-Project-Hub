@@ -590,6 +590,13 @@ export const repo = {
       const ordered = [...siblings.slice(0, clamped), node, ...siblings.slice(clamped)]
       statements.updatePlacement.run(parentId, newRootId, clamped, now(), id)
       ordered.forEach((sib, i) => {
+        /* `node` was read before the update above, so its row still carries the
+         * *old* parent. Re-indexing it here would write that stale parent back
+         * and silently undo the move whenever the node's previous sort_order
+         * differs from its new index — which is every drag into a container
+         * (index 0) of a node that had a sibling in front of it. That is how a
+         * group dragged onto another group ended up back at the root. */
+        if (sib.id === id) return
         if (sib.sort_order !== i) statements.updatePlacement.run(sib.parent_id, sib.root_id, i, now(), sib.id)
       })
       // Children inherit the new root_id for path uniqueness semantics.

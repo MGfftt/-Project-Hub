@@ -163,6 +163,13 @@ export const tree: Dict = {
   ],
   'tree.changeIcon': ['更改图标', 'Change icon'],
   'tree.newChildGroup': ['新建子分组', 'New child group'],
+  'tree.removeFromGroup': ['移出分组', 'Remove from group'],
+  'tree.removeFromGroupHint': [
+    '移到该分组上一级，磁盘目录不变',
+    'Moves one level above the group — nothing changes on disk'
+  ],
+  'tree.ungrouped': ['已移出分组', 'Removed from the group'],
+  'tree.ungroupFailed': ['移出分组失败：{error}', 'Could not remove from the group: {error}'],
   'tree.menuLabel': ['{name} 的操作', '{name} actions'],
   'tree.virtualGroup': ['虚拟分组', 'Virtual group'],
   'tree.groupNoDiskPath': ['分组没有对应的磁盘目录', 'Groups have no folder on disk'],
